@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "PlantDex",
+    "slug": "plantdex",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": { "backgroundColor": "#2c7a47" },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "PlantDex uses the camera to identify plants from photos.",
+        "NSPhotoLibraryUsageDescription": "PlantDex uses your photo library to identify plants from photos."
+      }
+    },
+    "android": {
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"],
+      "adaptiveIcon": { "backgroundColor": "#2c7a47" }
+    },
+    "plugins": [
+      ["expo-image-picker", { "cameraPermission": "PlantDex uses the camera to identify plants from photos." }]
+    ]
+  }
+}
