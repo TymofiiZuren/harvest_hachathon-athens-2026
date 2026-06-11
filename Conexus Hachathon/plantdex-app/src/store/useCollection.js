@@ -28,6 +28,7 @@ export const useCollection = create(
       gardenHealth: MAX_GARDEN_HEALTH,
 
       login: (user) => set({ currentUser: user }),
+      continueAsGuest: () => set({ currentUser: { name: 'Guest', role: 'guest' } }),
       logout: () => set({ currentUser: null }),
 
       setLessonInfo: (lesson) => set((s) => ({

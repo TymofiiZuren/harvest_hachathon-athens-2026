@@ -5,7 +5,10 @@ import ScanScreen from './src/screens/ScanScreen'
 import CollectionScreen from './src/screens/CollectionScreen'
 import ClassroomScreen from './src/screens/ClassroomScreen'
 import LoginScreen from './src/screens/LoginScreen'
+import RoleSelectScreen from './src/screens/RoleSelectScreen'
+import GuestShell from './src/screens/GuestShell'
 import TeacherDashboardScreen from './src/screens/TeacherDashboardScreen'
+import QuizScreen from './src/screens/QuizScreen'
 import { useCollection, DEX_GOAL } from './src/store/useCollection'
 import { unlockedAchievementCount } from './src/data/achievements'
 import { BrandMark, NavGlyph, StatIcon } from './src/components/DesignElements'
@@ -13,28 +16,54 @@ import { C } from './src/theme'
 
 export default function App() {
   const currentUser = useCollection((s) => s.currentUser)
+  const login = useCollection((s) => s.login)
+  const continueAsGuest = useCollection((s) => s.continueAsGuest)
   const logout = useCollection((s) => s.logout)
   const [tab, setTab] = useState('classroom')
+  const [pendingProfile, setPendingProfile] = useState(null) // Google profile awaiting role choice
   const points = useCollection((s) => s.points)
   const count = useCollection((s) => Object.keys(s.plants || {}).length)
   const gardenHealth = useCollection((s) => s.gardenHealth)
   const achievementCount = useCollection((s) => unlockedAchievementCount(s))
+
+  function handleLogout() {
+    setPendingProfile(null)
+    logout()
+  }
 
   useEffect(() => {
     if (currentUser?.role === 'teacher') setTab('dashboard')
     if (currentUser?.role === 'student') setTab('classroom')
   }, [currentUser?.role])
 
-  if (!currentUser) return <LoginScreen />
+  // Not signed in: Google login -> role select; or continue as guest.
+  if (!currentUser) {
+    if (pendingProfile) {
+      return <RoleSelectScreen profile={pendingProfile} onBack={() => setPendingProfile(null)} />
+    }
+    return (
+      <LoginScreen
+        onGoogle={(profile) => setPendingProfile(profile)}
+        onGuest={continueAsGuest}
+      />
+    )
+  }
+
+  // Guest (no account): scanner + quizzes + collection, no classroom.
+  if (currentUser.role === 'guest') {
+    return <GuestShell onExit={handleLogout} />
+  }
 
   const navItems = currentUser.role === 'teacher'
     ? [
         { key: 'dashboard', label: 'Dashboard' },
+        { key: 'quizzes', label: 'Quizzes' },
         { key: 'classroom', label: 'Classroom' },
         { key: 'collection', label: 'Collection' },
       ]
     : [
         { key: 'classroom', label: 'Classroom' },
+        { key: 'quizzes', label: 'Quizzes' },
         { key: 'scan', label: 'Scan' },
         { key: 'collection', label: 'Collection' },
       ]
@@ -51,7 +80,7 @@ export default function App() {
             <Text style={st.userLine}>{currentUser.name} / {currentUser.role}</Text>
           </View>
         </View>
-        <TouchableOpacity style={st.logoutBtn} onPress={logout}>
+        <TouchableOpacity style={st.logoutBtn} onPress={handleLogout}>
           <Text style={st.logoutText}>Log out</Text>
         </TouchableOpacity>
       </View>
@@ -65,6 +94,7 @@ export default function App() {
 
       <View style={st.body}>
         {tab === 'dashboard' && <TeacherDashboardScreen />}
+        {tab === 'quizzes' && <QuizScreen role={currentUser.role} />}
         {tab === 'scan' && <ScanScreen onGoCollection={() => setTab('collection')} />}
         {tab === 'classroom' && <ClassroomScreen role={currentUser.role} onGoScan={() => setTab('scan')} onGoDashboard={() => setTab('dashboard')} />}
         {tab === 'collection' && <CollectionScreen />}

@@ -11,7 +11,7 @@ import { CameraGlyph, PlantPlaceholder } from '../components/DesignElements'
 import { useCollection } from '../store/useCollection'
 import { C } from '../theme'
 
-export default function ScanScreen({ onGoCollection }) {
+export default function ScanScreen({ onGoCollection, freeScan = false }) {
   const [status, setStatus] = useState('idle') // idle | scanning | result | notplant | error
   const [preview, setPreview] = useState(null)
   const [result, setResult] = useState(null)
@@ -19,7 +19,9 @@ export default function ScanScreen({ onGoCollection }) {
   const activeTaskId = useCollection((s) => s.activeTaskId)
   const lessonTasks = useCollection((s) => s.lessonTasks?.length ? s.lessonTasks : LESSON_TASKS)
   const recordWrongTask = useCollection((s) => s.recordWrongTask)
-  const activeTask = lessonTasks.find((task) => task.id === activeTaskId) || lessonTasks[0]
+  // In free mode (guests / casual use) the scanner is a plain plant identifier
+  // with no classroom mission attached.
+  const activeTask = freeScan ? null : (lessonTasks.find((task) => task.id === activeTaskId) || lessonTasks[0])
 
   async function pickFrom(launcher, requestPerm, source = 'camera') {
     const perm = await requestPerm()
@@ -86,7 +88,9 @@ export default function ScanScreen({ onGoCollection }) {
           )}
           <Text style={s.title}>Find a plant</Text>
           <Text style={s.subtitle}>
-            Take a photo or choose one from your gallery. Correct plant evidence earns points; wrong evidence makes the class garden lose health.
+            {freeScan
+              ? 'Take a photo or choose one from your gallery to identify any plant and add it to your collection.'
+              : 'Take a photo or choose one from your gallery. Correct plant evidence earns points; wrong evidence makes the class garden lose health.'}
           </Text>
 
           <TouchableOpacity style={s.scanBtn} onPress={takePhoto} activeOpacity={0.85}>
@@ -127,7 +131,9 @@ export default function ScanScreen({ onGoCollection }) {
           <PlantPlaceholder size={78} />
           <Text style={s.title}>That does not look like a plant</Text>
           <Text style={s.subtitle}>
-            Bad outcome: the classroom seedling wilted. Point the camera at a single leaf or flower and try again.
+            {freeScan
+              ? 'Point the camera at a single leaf or flower, fill the frame, and try again.'
+              : 'Bad outcome: the classroom seedling wilted. Point the camera at a single leaf or flower and try again.'}
           </Text>
           <TouchableOpacity style={s.scanBtnSmall} onPress={reset}>
             <Text style={s.scanLabel}>Try again</Text>
