@@ -15,6 +15,17 @@ const PLANTNET_URL =
   `https://my-api.plantnet.org/v2/identify/k-world-flora?api-key=${PLANTNET_API_KEY}&include-related-images=true`
 const WIKI_SUMMARY = 'https://en.wikipedia.org/api/rest_v1/page/summary/'
 
+// Wikimedia blocks requests with a default/empty User-Agent (HTTP 403). React
+// Native's fetch sends no descriptive UA — and on Android the underlying OkHttp
+// UA ("okhttp/x.y.z") is explicitly rejected — so the Wikipedia enrichment quietly
+// failed there and the result card showed no description. Identify the client per
+// https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
+// (replace the contact below with a real email or repo URL before release).
+const WIKI_HEADERS = {
+  'Api-User-Agent': 'PlantDex/1.0 (hackathon-athens-2026; contact@example.com)',
+  'User-Agent': 'PlantDex/1.0 (hackathon-athens-2026; contact@example.com)',
+}
+
 export async function identifyPlant(uri) {
   let res
   try {
@@ -55,9 +66,14 @@ export async function identifyPlant(uri) {
   }
 
   const enrich = await enrichWiki(base.scientificName, base.commonName)
+  // Wikipedia can still come back empty (no article, disambiguation, rate limit).
+  // Show a minimal fallback so the card never renders without any description.
+  const fallbackDesc = base.family
+    ? `${base.commonName} (${base.scientificName}), a species in the ${base.family} family.`
+    : `${base.commonName} (${base.scientificName}).`
   return {
     ...base,
-    description: enrich.description || '',
+    description: enrich.description || fallbackDesc,
     image: base.image || enrich.image || null,
     wikiUrl: enrich.wikiUrl || '',
   }
@@ -67,7 +83,9 @@ async function enrichWiki(scientificName, commonName) {
   for (const title of [scientificName, commonName]) {
     if (!title) continue
     try {
-      const res = await fetch(WIKI_SUMMARY + encodeURIComponent(title.replace(/ /g, '_')))
+      const res = await fetch(WIKI_SUMMARY + encodeURIComponent(title.replace(/ /g, '_')), {
+        headers: WIKI_HEADERS,
+      })
       if (!res.ok) continue
       const data = await res.json()
       if (data.type === 'disambiguation') continue
