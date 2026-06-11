@@ -31,6 +31,7 @@ export function NavGlyph({ type, active = false }) {
   if (type === 'scan') return <CameraGlyph color={color} small />
   if (type === 'collection') return <BookGlyph color={color} />
   if (type === 'dashboard') return <DashboardGlyph color={color} />
+  if (type === 'quizzes' || type === 'quiz' || type === 'join') return <QuizGlyph color={color} />
   return <ClassGlyph color={color} />
 }
 
@@ -67,6 +68,17 @@ export function DashboardGlyph({ color = C.leafDark }) {
   return (
     <View style={d.dashIcon}> 
       {[0, 1, 2, 3].map((n) => <View key={n} style={[d.dashCell, { backgroundColor: color }]} />)}
+    </View>
+  )
+}
+
+export function QuizGlyph({ color = C.leafDark }) {
+  return (
+    <View style={[d.quiz, { borderColor: color }]}>
+      <View style={[d.quizDot, { backgroundColor: color }]} />
+      <View style={[d.quizDot, { backgroundColor: color }]} />
+      <View style={[d.quizDot, { backgroundColor: color }]} />
+      <View style={[d.quizDotWide, { backgroundColor: color }]} />
     </View>
   )
 }
@@ -115,6 +127,9 @@ const d = StyleSheet.create({
   board: { position: 'absolute', width: 26, height: 12, borderWidth: 2, borderRadius: 4, bottom: 0, left: 2 },
   dashIcon: { width: 28, height: 28, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   dashCell: { width: 12, height: 12, borderRadius: 4, opacity: 0.86 },
+  quiz: { width: 27, height: 27, borderWidth: 2.5, borderRadius: 7, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 3, padding: 4 },
+  quizDot: { width: 6, height: 6, borderRadius: 6 },
+  quizDotWide: { width: 15, height: 4, borderRadius: 3 },
   dot: { width: 14, height: 14, borderRadius: 14, marginRight: 10 },
   achievement: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   achievementCore: { width: 14, height: 14, borderRadius: 14 },
