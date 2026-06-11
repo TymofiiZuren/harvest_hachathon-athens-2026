@@ -1,9 +1,18 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image, Modal } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
 import { useCollection } from '../store/useCollection'
-import { LESSON_TASKS } from '../data/lessonTasks'
-import { StatusDot } from '../components/DesignElements'
+import { LESSON_TASKS, missionImageForTask } from '../data/lessonTasks'
+import { PlantPlaceholder, StatusDot } from '../components/DesignElements'
 import { C } from '../theme'
+
+function MissionThumb({ task }) {
+  const image = missionImageForTask(task)
+  if (!image) {
+    return <View style={s.thumb}><PlantPlaceholder size={38} /></View>
+  }
+  return <Image source={{ uri: image }} style={s.thumb} resizeMode="contain" />
+}
 
 export default function TeacherDashboardScreen() {
   const classroom = useCollection((s) => s.classroom)
@@ -12,6 +21,7 @@ export default function TeacherDashboardScreen() {
   const setActiveTask = useCollection((s) => s.setActiveTask)
   const setLessonInfo = useCollection((s) => s.setLessonInfo)
   const addLessonTask = useCollection((s) => s.addLessonTask)
+  const deleteLessonTask = useCollection((s) => s.deleteLessonTask)
   const completedTasks = useCollection((s) => s.completedTasks)
 
   const [lesson, setLesson] = useState({
@@ -24,9 +34,8 @@ export default function TeacherDashboardScreen() {
   const [mission, setMission] = useState({
     title: '',
     targetPlant: '',
+    imageUri: '',
     points: '100',
-    question: '',
-    answer: '',
   })
 
   function updateLesson(key, value) {
@@ -42,6 +51,32 @@ export default function TeacherDashboardScreen() {
     Alert.alert('Lesson saved', 'Students will now see the updated classroom lesson.')
   }
 
+  async function chooseReferenceImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('No access', 'Please allow photo library access to choose a mission image.')
+      return
+    }
+
+    const res = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.75,
+      mediaTypes: ['images'],
+    })
+    if (res.canceled) return
+    updateMission('imageUri', res.assets[0].uri)
+  }
+
+  function confirmDeleteTask(task) {
+    Alert.alert(
+      'Delete mission?',
+      `Remove "${task.title}" from the class mission bank?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteLessonTask(task.id) },
+      ]
+    )
+  }
+
   function createMission() {
     if (!mission.title.trim() || !mission.targetPlant.trim()) {
       Alert.alert('Missing details', 'Add a mission title and target plant name.')
@@ -53,13 +88,11 @@ export default function TeacherDashboardScreen() {
       description: `Collect photo evidence for: ${mission.targetPlant.trim()}.`,
       targetPlant: mission.targetPlant.trim(),
       targetCommonNames: [mission.targetPlant.trim()],
+      targetImage: mission.imageUri,
       points: mission.points,
-      question: mission.question.trim() || `Which plant did you identify for ${mission.title.trim()}?`,
-      answer: mission.answer.trim() || mission.targetPlant.trim(),
-      choices: [mission.answer.trim() || mission.targetPlant.trim(), 'Different leaf type', 'Different flower', 'Different family'],
-      hint: `Search for ${mission.targetPlant.trim()} and compare the photo result before submitting.`,
+      hint: `Search for ${mission.targetPlant.trim()} and compare your find with the mission image before submitting.`,
     })
-    setMission({ title: '', targetPlant: '', points: '100', question: '', answer: '' })
+    setMission({ title: '', targetPlant: '', imageUri: '', points: '100' })
     Alert.alert('Mission created', 'The new mission is now live for students.')
   }
 
@@ -86,10 +119,10 @@ export default function TeacherDashboardScreen() {
       <View style={s.card}>
         <Text style={s.section}>Create plant mission</Text>
         <Field label="Mission title" value={mission.title} onChangeText={(v) => updateMission('title', v)} placeholder="Find a lavender plant" />
+        <Text style={s.inputLabel}>Reference picture</Text>
+        <ReferenceImagePicker image={mission.imageUri} onPress={chooseReferenceImage} />
         <Field label="Target plant common name" value={mission.targetPlant} onChangeText={(v) => updateMission('targetPlant', v)} placeholder="lavender" />
         <Field label="Points" value={mission.points} onChangeText={(v) => updateMission('points', v)} keyboardType="number-pad" />
-        <Field label="Quiz question" value={mission.question} onChangeText={(v) => updateMission('question', v)} placeholder="What adaptation helps this plant?" />
-        <Field label="Correct answer" value={mission.answer} onChangeText={(v) => updateMission('answer', v)} placeholder="Aromatic leaves" />
         <TouchableOpacity style={s.primaryBtn} onPress={createMission}>
           <Text style={s.primaryText}>Create and publish mission</Text>
         </TouchableOpacity>
@@ -102,14 +135,20 @@ export default function TeacherDashboardScreen() {
         return (
           <View key={task.id} style={[s.taskCard, isActive && s.taskCardActive]}>
             <StatusDot status={complete ? 'done' : isActive ? 'active' : 'neutral'} />
+            <MissionThumb task={task} />
             <View style={{ flex: 1 }}>
               <Text style={s.taskTitle}>{task.title}</Text>
               <Text style={s.taskMeta}>{task.topic} / {task.points} points</Text>
               <Text style={s.taskDesc}>{task.description}</Text>
             </View>
-            <TouchableOpacity style={[s.setBtn, isActive && s.setBtnActive]} onPress={() => setActiveTask(task.id)}>
-              <Text style={[s.setText, isActive && s.setTextActive]}>{isActive ? 'Live' : 'Set live'}</Text>
-            </TouchableOpacity>
+            <View style={s.taskActions}>
+              <TouchableOpacity style={[s.setBtn, isActive && s.setBtnActive]} onPress={() => setActiveTask(task.id)}>
+                <Text style={[s.setText, isActive && s.setTextActive]}>{isActive ? 'Live' : 'Set'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.deleteBtn} onPress={() => confirmDeleteTask(task)}>
+                <Text style={s.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )
       })}
@@ -117,9 +156,50 @@ export default function TeacherDashboardScreen() {
   )
 }
 
+function ReferenceImagePicker({ image, onPress }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <TouchableOpacity style={s.autoPreview} onPress={onPress} activeOpacity={0.85}>
+        {image ? (
+          <>
+            <Image source={{ uri: image }} style={s.autoPreviewImage} resizeMode="contain" />
+            <TouchableOpacity style={s.previewInfoBtn} onPress={() => setOpen(true)} activeOpacity={0.82}>
+              <Text style={s.previewInfoText}>i</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <View style={s.autoPreviewEmpty}>
+            <PlantPlaceholder size={54} />
+            <Text style={s.autoPreviewTitle}>Upload image</Text>
+            <Text style={s.autoPreviewSub}>Pick a reference photo from your phone.</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={s.modalShade}>
+          <View style={s.previewModalCard}>
+            <View style={s.previewModalTop}>
+              <Text style={s.previewModalTitle}>Reference image</Text>
+              <TouchableOpacity style={s.previewClose} onPress={() => setOpen(false)}>
+                <Text style={s.previewCloseText}>×</Text>
+              </TouchableOpacity>
+            </View>
+            {!!image && <Image source={{ uri: image }} style={s.previewModalImage} resizeMode="contain" />}
+            <TouchableOpacity style={s.replaceImageBtn} onPress={() => { setOpen(false); onPress?.() }}>
+              <Text style={s.replaceImageText}>Choose another photo</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
+  )
+}
+
 function Field({ label, multiline = false, ...props }) {
   return (
-    <View style={{ marginTop: 10 }}>
+    <View style={s.fieldWrap}>
       <Text style={s.inputLabel}>{label}</Text>
       <TextInput
         style={[s.input, multiline && s.multiline]}
@@ -140,18 +220,39 @@ const s = StyleSheet.create({
   card: { backgroundColor: C.white, borderRadius: 24, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: C.line },
   section: { color: C.bark, fontSize: 18, fontWeight: '900', marginBottom: 4 },
   sectionOutside: { color: C.bark, fontSize: 18, fontWeight: '900', marginBottom: 10, marginTop: 4 },
-  inputLabel: { color: C.bark, fontWeight: '800', marginBottom: 6 },
+  fieldWrap: { marginTop: 10, alignSelf: 'stretch' },
+  inputLabel: { color: C.bark, fontWeight: '800', marginBottom: 6, alignSelf: 'flex-start', textAlign: 'left' },
   input: { backgroundColor: C.cream, borderRadius: 15, paddingHorizontal: 13, paddingVertical: 12, color: C.bark, fontWeight: '700', borderWidth: 1, borderColor: C.line },
   multiline: { minHeight: 92, textAlignVertical: 'top' },
+  autoPreview: { width: '100%', height: 190, marginTop: 8, marginBottom: 4, borderRadius: 18, overflow: 'hidden', backgroundColor: '#e3f0e6', borderWidth: 1.5, borderColor: C.line },
+  autoPreviewImage: { width: '100%', height: 190 },
+  autoPreviewEmpty: { height: 190, alignItems: 'center', justifyContent: 'center', padding: 14 },
+  previewInfoBtn: { position: 'absolute', right: 8, top: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: C.leafDark, alignItems: 'center', justifyContent: 'center' },
+  previewInfoText: { color: C.cream, fontWeight: '900', fontSize: 15, fontStyle: 'italic' },
+  modalShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 22 },
+  previewModalCard: { backgroundColor: C.white, borderRadius: 24, padding: 16 },
+  previewModalTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  previewModalTitle: { color: C.bark, fontWeight: '900', fontSize: 18, flex: 1 },
+  previewClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.cream, alignItems: 'center', justifyContent: 'center' },
+  previewCloseText: { color: C.bark, fontSize: 22, fontWeight: '900', lineHeight: 24 },
+  previewModalImage: { width: '100%', height: 310, borderRadius: 18, backgroundColor: '#e3f0e6' },
+  replaceImageBtn: { backgroundColor: C.leafDark, borderRadius: 16, alignItems: 'center', paddingVertical: 13, marginTop: 14 },
+  replaceImageText: { color: C.cream, fontWeight: '900' },
+  autoPreviewTitle: { color: C.bark, fontWeight: '900', marginTop: 5, textAlign: 'center', fontSize: 12 },
+  autoPreviewSub: { color: C.muted, fontSize: 10, textAlign: 'center', marginTop: 3, lineHeight: 13 },
   primaryBtn: { backgroundColor: C.leafDark, borderRadius: 17, paddingVertical: 14, alignItems: 'center', marginTop: 14 },
-  primaryText: { color: C.cream, fontWeight: '900' },
+  primaryText: { color: C.cream, fontWeight: '900', textAlign: 'center' },
   taskCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.white, borderRadius: 18, padding: 13, marginBottom: 10, borderWidth: 1.5, borderColor: C.line },
+  thumb: { width: 58, height: 58, borderRadius: 14, backgroundColor: '#e3f0e6', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   taskCardActive: { borderColor: C.sun, backgroundColor: '#fffaf0' },
-  taskTitle: { color: C.bark, fontWeight: '900', fontSize: 15 },
-  taskMeta: { color: C.leafDark, fontWeight: '800', fontSize: 12, marginTop: 2 },
-  taskDesc: { color: C.muted, lineHeight: 18, marginTop: 5, fontSize: 12 },
-  setBtn: { borderWidth: 1.5, borderColor: C.leafDark, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  taskTitle: { color: C.bark, fontWeight: '900', fontSize: 15, textAlign: 'left' },
+  taskMeta: { color: C.leafDark, fontWeight: '800', fontSize: 12, marginTop: 2, textAlign: 'left' },
+  taskDesc: { color: C.muted, lineHeight: 18, marginTop: 5, fontSize: 12, textAlign: 'left' },
+  taskActions: { alignSelf: 'stretch', justifyContent: 'center', gap: 8 },
+  setBtn: { borderWidth: 1.5, borderColor: C.leafDark, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' },
   setBtnActive: { backgroundColor: C.leafDark },
   setText: { color: C.leafDark, fontWeight: '900', fontSize: 12 },
   setTextActive: { color: C.cream },
+  deleteBtn: { borderWidth: 1.5, borderColor: '#b5562a', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' },
+  deleteText: { color: '#b5562a', fontWeight: '900', fontSize: 12 },
 })

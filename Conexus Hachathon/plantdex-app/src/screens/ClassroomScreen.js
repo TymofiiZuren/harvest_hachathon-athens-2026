@@ -1,8 +1,9 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
-import { CLASSROOM, LESSON_TASKS } from '../data/lessonTasks'
+import { useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Modal } from 'react-native'
+import { CLASSROOM, LESSON_TASKS, missionImageForTask } from '../data/lessonTasks'
 import { getAchievements } from '../data/achievements'
 import { useCollection } from '../store/useCollection'
-import { AchievementGlyph, StatusDot } from '../components/DesignElements'
+import { AchievementGlyph, PlantPlaceholder, StatusDot } from '../components/DesignElements'
 import { C } from '../theme'
 
 export default function ClassroomScreen({ role = 'student', onGoScan, onGoDashboard }) {
@@ -59,24 +60,22 @@ export default function ClassroomScreen({ role = 'student', onGoScan, onGoDashbo
 
 function StudentPanel({ activeTask, completedTasks, gardenHealth, achievements, lessonTasks, chooseTask, onGoScan }) {
   const unlocked = achievements.filter((achievement) => achievement.unlocked)
+  const [hintOpen, setHintOpen] = useState(false)
   return (
     <>
       <View style={s.activeMission}>
         <View style={s.sectionHeader}>
           <Text style={s.section}>Current mission</Text>
-          <View style={s.pointsChip}><Text style={s.pointsText}>{activeTask.points} pts</Text></View>
+          <View style={s.missionControls}>
+            <TouchableOpacity style={s.infoBtn} onPress={() => setHintOpen(true)} activeOpacity={0.82}>
+              <Text style={s.infoText}>i</Text>
+            </TouchableOpacity>
+            <View style={s.pointsChip}><Text style={s.pointsText}>{activeTask.points} pts</Text></View>
+          </View>
         </View>
         <Text style={s.missionTitle}>{activeTask.title}</Text>
         <Text style={s.desc}>{activeTask.description}</Text>
         <Text style={s.hint}>Field note: {activeTask.hint}</Text>
-        <Text style={s.quiz}>Quick check: {activeTask.quiz.question}</Text>
-        <View style={s.choiceWrap}>
-          {activeTask.quiz.choices.map((choice) => (
-            <View key={choice} style={s.choiceChip}>
-              <Text style={s.choiceText}>{choice}</Text>
-            </View>
-          ))}
-        </View>
         <TouchableOpacity style={s.primaryBtn} onPress={onGoScan} activeOpacity={0.85}>
           <Text style={s.primaryText}>Add photo evidence</Text>
         </TouchableOpacity>
@@ -98,6 +97,8 @@ function StudentPanel({ activeTask, completedTasks, gardenHealth, achievements, 
           </TouchableOpacity>
         )
       })}
+
+      <HintModal task={activeTask} visible={hintOpen} onClose={() => setHintOpen(false)} />
 
       <Text style={s.section}>Achievements</Text>
       <View style={s.achievementRow}>
@@ -136,12 +137,12 @@ function TeacherPanel({ activeTask, completedTasks, lessonTasks, classroom, choo
       <Text style={s.section}>Mission bank</Text>
       {lessonTasks.map((task) => (
         <View key={task.id} style={[s.teacherTask, task.id === activeTask.id && s.teacherTaskActive]}>
+          <MissionImage task={task} />
           <View style={{ flex: 1 }}>
             <Text style={s.taskTitle}>{task.title}</Text>
             <Text style={s.taskMeta}>{task.topic} / {task.points} points</Text>
             <Text style={s.desc}>{task.description}</Text>
-            <Text style={s.quiz}>Check: {task.quiz.question}</Text>
-            <Text style={s.answer}>Answer: {task.quiz.answer}</Text>
+            <Text style={s.hint}>Target: {(task.targetCommonNames || task.targetScientificNames || ['Plant'])[0]}</Text>
           </View>
           <TouchableOpacity style={s.setBtn} onPress={() => chooseTask(task.id)}>
             <Text style={s.setText}>{task.id === activeTask.id ? 'Live' : 'Set'}</Text>
@@ -159,6 +160,46 @@ function TeacherPanel({ activeTask, completedTasks, lessonTasks, classroom, choo
       ))}
     </>
   )
+}
+
+function HintModal({ task, visible, onClose }) {
+  const image = missionImageForTask(task)
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalShade}>
+        <View style={s.hintCard}>
+          <View style={s.hintTopRow}>
+            <Text style={s.hintTitle}>Plant hint</Text>
+            <TouchableOpacity style={s.closeCircle} onPress={onClose}>
+              <Text style={s.closeCircleText}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={s.hintPlantName}>{task?.title}</Text>
+          {image ? (
+            <Image source={{ uri: image }} style={s.hintImage} resizeMode="contain" />
+          ) : (
+            <View style={s.hintImage}><PlantPlaceholder size={92} /></View>
+          )}
+          <Text style={s.hintText}>{task?.hint}</Text>
+          <TouchableOpacity style={s.hintCloseBtn} onPress={onClose}>
+            <Text style={s.hintCloseText}>Back to mission</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function MissionImage({ task, large = false }) {
+  const image = missionImageForTask(task)
+  if (!image) {
+    return (
+      <View style={large ? s.missionImageLarge : s.missionThumb}>
+        <PlantPlaceholder size={large ? 88 : 36} />
+      </View>
+    )
+  }
+  return <Image source={{ uri: image }} style={large ? s.missionImageLarge : s.missionThumb} resizeMode="contain" />
 }
 
 function Metric({ label, value }) {
@@ -193,9 +234,25 @@ const s = StyleSheet.create({
   activeMission: { backgroundColor: C.white, borderRadius: 24, padding: 17, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(58,157,93,0.18)' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   section: { color: C.bark, fontSize: 18, fontWeight: '900', marginBottom: 10, marginTop: 4 },
+  missionControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.leafDark, alignItems: 'center', justifyContent: 'center' },
+  infoText: { color: C.cream, fontWeight: '900', fontSize: 16, fontStyle: 'italic' },
   pointsChip: { backgroundColor: 'rgba(244,185,66,0.25)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   pointsText: { color: C.bark, fontWeight: '900', fontSize: 12 },
   missionTitle: { color: C.bark, fontWeight: '900', fontSize: 22 },
+  missionImageLarge: { width: '100%', height: 170, borderRadius: 18, backgroundColor: '#e3f0e6', marginTop: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  missionThumb: { width: 58, height: 58, borderRadius: 14, backgroundColor: '#e3f0e6', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginRight: 10 },
+  modalShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 22 },
+  hintCard: { backgroundColor: C.white, borderRadius: 26, padding: 18, maxHeight: '86%' },
+  hintTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hintTitle: { color: C.leafDark, fontWeight: '900', textTransform: 'uppercase', fontSize: 12, letterSpacing: 0.8 },
+  closeCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.cream, alignItems: 'center', justifyContent: 'center' },
+  closeCircleText: { color: C.bark, fontSize: 22, fontWeight: '900', lineHeight: 24 },
+  hintPlantName: { color: C.bark, fontWeight: '900', fontSize: 22, marginTop: 8 },
+  hintImage: { width: '100%', height: 230, borderRadius: 18, backgroundColor: '#e3f0e6', marginTop: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  hintText: { color: C.muted, lineHeight: 21, marginTop: 14, fontWeight: '700' },
+  hintCloseBtn: { backgroundColor: C.leafDark, borderRadius: 16, alignItems: 'center', paddingVertical: 14, marginTop: 16 },
+  hintCloseText: { color: C.cream, fontWeight: '900' },
   desc: { color: C.muted, lineHeight: 20, marginTop: 6 },
   hint: { color: C.leafDark, fontWeight: '800', marginTop: 11, lineHeight: 20 },
   quiz: { color: C.bark, marginTop: 11, fontWeight: '800' },

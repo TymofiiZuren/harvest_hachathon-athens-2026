@@ -6,7 +6,7 @@ import QuizPlayer from '../components/QuizPlayer'
 import QuizCreateScreen from './QuizCreateScreen'
 import { C } from '../theme'
 
-// role: 'teacher' (build + host) or 'student' / 'guest' (join + play)
+// role: 'teacher' (build + host) or 'student' (join + play)
 export default function QuizScreen({ role = 'student' }) {
   const quizzes = useQuiz((s) => s.quizzes)
   const hostQuiz = useQuiz((s) => s.hostQuiz)
@@ -65,7 +65,7 @@ export default function QuizScreen({ role = 'student' }) {
           <View style={s.hero}>
             <Text style={s.eyebrow}>Interactive quizzes</Text>
             <Text style={s.heroTitle}>Host a live quiz</Text>
-            <Text style={s.heroSub}>Build Kahoot-style quizzes and share a join code. Students or guests join without an account.</Text>
+            <Text style={s.heroSub}>Build Kahoot-style quizzes and share a join code with students.</Text>
             <TouchableOpacity style={s.createBtn} onPress={() => setMode('create')}>
               <Text style={s.createText}>+ Create new quiz</Text>
             </TouchableOpacity>
@@ -137,7 +137,11 @@ export default function QuizScreen({ role = 'student' }) {
 function QuizRow({ quiz, teacher = false, onPlay, onHost, onPreview, onShare, onDelete }) {
   return (
     <View style={[s.row, { borderLeftColor: quiz.accent }]}>
-      <Text style={s.rowEmoji}>{quiz.emoji}</Text>
+      <View style={[s.quizMark, { backgroundColor: quiz.accent }]}>
+        <View style={s.quizMarkDot} />
+        <View style={s.quizMarkDot} />
+        <View style={s.quizMarkLine} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={s.rowTitle}>{quiz.title}</Text>
         <Text style={s.rowMeta}>{quiz.topic} · {quiz.questions.length} questions · {quiz.code}</Text>
@@ -194,7 +198,9 @@ const s = StyleSheet.create({
   endText: { color: '#b5562a', fontWeight: '800', marginTop: 14 },
   sectionTitle: { color: C.bark, fontSize: 18, fontWeight: '900', marginBottom: 10, marginTop: 2 },
   row: { flexDirection: 'row', gap: 12, backgroundColor: C.white, borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line, borderLeftWidth: 5 },
-  rowEmoji: { fontSize: 30 },
+  quizMark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  quizMarkDot: { width: 7, height: 7, borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.92)' },
+  quizMarkLine: { width: 20, height: 4, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.92)' },
   rowTitle: { color: C.bark, fontWeight: '900', fontSize: 16 },
   rowMeta: { color: C.muted, fontWeight: '700', fontSize: 12, marginTop: 3 },
   rowBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },

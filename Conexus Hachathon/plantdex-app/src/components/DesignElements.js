@@ -28,15 +28,17 @@ export function PlantPlaceholder({ size = 74 }) {
 
 export function NavGlyph({ type, active = false }) {
   const color = active ? C.leafDark : '#b9b0a2'
-  if (type === 'scan') return <CameraGlyph color={color} small />
-  if (type === 'collection') return <BookGlyph color={color} />
-  if (type === 'dashboard') return <DashboardGlyph color={color} />
-  if (type === 'quizzes' || type === 'quiz' || type === 'join') return <QuizGlyph color={color} />
-  return <ClassGlyph color={color} />
+  let glyph
+  if (type === 'scan') glyph = <CameraGlyph color={color} small />
+  else if (type === 'collection') glyph = <BookGlyph color={color} />
+  else if (type === 'dashboard') glyph = <DashboardGlyph color={color} />
+  else if (type === 'quizzes' || type === 'quiz' || type === 'join') glyph = <QuizGlyph color={color} />
+  else glyph = <ClassGlyph color={color} />
+  return <View style={[d.navGlyphFrame, active && d.navGlyphFrameActive]}>{glyph}</View>
 }
 
 export function CameraGlyph({ color = C.leafDark, small = false }) {
-  const w = small ? 28 : 42
+  const w = small ? 21 : 42
   return (
     <View style={[d.camera, { width: w, height: w * 0.72, borderColor: color }]}> 
       <View style={[d.cameraTop, { borderBottomColor: color }]} />
@@ -116,20 +118,22 @@ const d = StyleSheet.create({
   plantLeafB: { position: 'absolute', width: '42%', height: '21%', right: '15%', bottom: '55%', borderTopRightRadius: 999, borderBottomLeftRadius: 999, backgroundColor: C.leafLight, transform: [{ rotate: '24deg' }] },
   plantLeafC: { position: 'absolute', width: '35%', height: '18%', right: '21%', bottom: '34%', borderTopRightRadius: 999, borderBottomLeftRadius: 999, backgroundColor: C.leaf, transform: [{ rotate: '16deg' }] },
   camera: { borderWidth: 2.5, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  cameraTop: { position: 'absolute', top: -8, left: 5, width: 12, height: 8, borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
+  cameraTop: { position: 'absolute', top: -6, left: 5, width: 11, height: 7, borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 7, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   lens: { width: 12, height: 12, borderRadius: 8, borderWidth: 2 },
-  book: { width: 27, height: 25, borderWidth: 2.5, borderRadius: 5, paddingTop: 6, paddingHorizontal: 5 },
+  navGlyphFrame: { width: 28, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  navGlyphFrameActive: { backgroundColor: 'rgba(58,157,93,0.12)' },
+  book: { width: 21, height: 20, borderWidth: 2, borderRadius: 5, paddingTop: 4, paddingHorizontal: 4 },
   bookLine: { height: 2, borderRadius: 3, width: '86%', marginBottom: 4 },
   bookLineSmall: { height: 2, borderRadius: 3, width: '58%' },
-  classIcon: { width: 30, height: 26 },
-  person: { position: 'absolute', width: 10, height: 10, borderRadius: 10, left: 3, top: 1 },
-  personSmall: { position: 'absolute', width: 8, height: 8, borderRadius: 8, left: 16, top: 5, opacity: 0.55 },
-  board: { position: 'absolute', width: 26, height: 12, borderWidth: 2, borderRadius: 4, bottom: 0, left: 2 },
-  dashIcon: { width: 28, height: 28, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  dashCell: { width: 12, height: 12, borderRadius: 4, opacity: 0.86 },
-  quiz: { width: 27, height: 27, borderWidth: 2.5, borderRadius: 7, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 3, padding: 4 },
-  quizDot: { width: 6, height: 6, borderRadius: 6 },
-  quizDotWide: { width: 15, height: 4, borderRadius: 3 },
+  classIcon: { width: 23, height: 21 },
+  person: { position: 'absolute', width: 8, height: 8, borderRadius: 8, left: 2, top: 1 },
+  personSmall: { position: 'absolute', width: 7, height: 7, borderRadius: 7, left: 13, top: 4, opacity: 0.55 },
+  board: { position: 'absolute', width: 22, height: 10, borderWidth: 2, borderRadius: 4, bottom: 0, left: 1 },
+  dashIcon: { width: 21, height: 21, flexDirection: 'row', flexWrap: 'wrap', gap: 3 },
+  dashCell: { width: 9, height: 9, borderRadius: 3, opacity: 0.86 },
+  quiz: { width: 21, height: 21, borderWidth: 2, borderRadius: 6, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 2, padding: 3 },
+  quizDot: { width: 5, height: 5, borderRadius: 5 },
+  quizDotWide: { width: 13, height: 3, borderRadius: 3 },
   dot: { width: 14, height: 14, borderRadius: 14, marginRight: 10 },
   achievement: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   achievementCore: { width: 14, height: 14, borderRadius: 14 },

@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import {
-  View, Text, TouchableOpacity, Image, ActivityIndicator, StyleSheet, ScrollView, Alert,
+  View, Text, TouchableOpacity, Image, ActivityIndicator, StyleSheet, ScrollView, Alert, Modal,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { identifyPlant } from '../services/plantnet'
 import ResultCard from './ResultCard'
-import { LESSON_TASKS, matchPlantToTask } from '../data/lessonTasks'
+import { LESSON_TASKS, matchPlantToTask, missionImageForTask } from '../data/lessonTasks'
 import { CameraGlyph, PlantPlaceholder } from '../components/DesignElements'
 import { useCollection } from '../store/useCollection'
 import { C } from '../theme'
@@ -16,6 +16,7 @@ export default function ScanScreen({ onGoCollection, freeScan = false }) {
   const [preview, setPreview] = useState(null)
   const [result, setResult] = useState(null)
   const [taskStatus, setTaskStatus] = useState(null)
+  const [hintOpen, setHintOpen] = useState(false)
   const activeTaskId = useCollection((s) => s.activeTaskId)
   const lessonTasks = useCollection((s) => s.lessonTasks?.length ? s.lessonTasks : LESSON_TASKS)
   const recordWrongTask = useCollection((s) => s.recordWrongTask)
@@ -80,7 +81,12 @@ export default function ScanScreen({ onGoCollection, freeScan = false }) {
         <View style={s.center}>
           {activeTask && (
             <View style={s.taskBanner}>
-              <Text style={s.taskLabel}>Classroom task</Text>
+              <View style={s.taskTopRow}>
+                <Text style={s.taskLabel}>Classroom task</Text>
+                <TouchableOpacity style={s.infoBtn} onPress={() => setHintOpen(true)}>
+                  <Text style={s.infoText}>i</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={s.taskTitle}>{activeTask.title}</Text>
               <Text style={s.taskDesc}>{activeTask.description}</Text>
               <Text style={s.taskPoints}>{activeTask.points} pts / camera or gallery evidence</Text>
@@ -103,6 +109,8 @@ export default function ScanScreen({ onGoCollection, freeScan = false }) {
           </TouchableOpacity>
         </View>
       )}
+
+      {activeTask && <TaskHintModal task={activeTask} visible={hintOpen} onClose={() => setHintOpen(false)} />}
 
       {status === 'scanning' && (
         <View style={s.center}>
@@ -155,6 +163,34 @@ export default function ScanScreen({ onGoCollection, freeScan = false }) {
   )
 }
 
+function TaskHintModal({ task, visible, onClose }) {
+  const image = missionImageForTask(task)
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalShade}>
+        <View style={s.hintCard}>
+          <View style={s.hintTopRow}>
+            <Text style={s.hintLabel}>Plant hint</Text>
+            <TouchableOpacity style={s.closeCircle} onPress={onClose}>
+              <Text style={s.closeCircleText}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={s.hintTitle}>{task.title}</Text>
+          {image ? (
+            <Image source={{ uri: image }} style={s.hintImage} resizeMode="contain" />
+          ) : (
+            <View style={s.hintImage}><PlantPlaceholder size={92} /></View>
+          )}
+          <Text style={s.hintBody}>{task.hint}</Text>
+          <TouchableOpacity style={s.hintCloseBtn} onPress={onClose}>
+            <Text style={s.hintCloseText}>Back to scan</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 async function prepareImageForPlantNet(asset) {
   try {
     const largestSide = Math.max(asset.width || 0, asset.height || 0)
@@ -190,7 +226,10 @@ const s = StyleSheet.create({
   scroll: { padding: 20, paddingBottom: 40, flexGrow: 1 },
   center: { alignItems: 'center', paddingTop: 24 },
   taskBanner: { width: '100%', backgroundColor: C.white, borderRadius: 20, padding: 16, borderWidth: 2, borderColor: 'rgba(58,157,93,0.22)', marginBottom: 18 },
+  taskTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   taskLabel: { color: C.leafDark, fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
+  infoBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.leafDark, alignItems: 'center', justifyContent: 'center' },
+  infoText: { color: C.cream, fontWeight: '900', fontSize: 16, fontStyle: 'italic' },
   taskTitle: { color: C.bark, fontSize: 19, fontWeight: '900', marginTop: 4 },
   taskDesc: { color: C.muted, marginTop: 5, lineHeight: 19 },
   taskPoints: { color: C.bark, fontWeight: '800', marginTop: 8 },
@@ -211,4 +250,15 @@ const s = StyleSheet.create({
   previewSmall: { width: 140, height: 140, borderRadius: 20, marginBottom: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   scanningText: { color: C.leafDark, fontWeight: '700', fontSize: 16 },
+  modalShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 22 },
+  hintCard: { backgroundColor: C.white, borderRadius: 26, padding: 18, maxHeight: '86%' },
+  hintTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hintLabel: { color: C.leafDark, fontWeight: '900', textTransform: 'uppercase', fontSize: 12, letterSpacing: 0.8 },
+  closeCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.cream, alignItems: 'center', justifyContent: 'center' },
+  closeCircleText: { color: C.bark, fontSize: 22, fontWeight: '900', lineHeight: 24 },
+  hintTitle: { color: C.bark, fontWeight: '900', fontSize: 22, marginTop: 8 },
+  hintImage: { width: '100%', height: 230, borderRadius: 18, backgroundColor: '#e3f0e6', marginTop: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  hintBody: { color: C.muted, lineHeight: 21, marginTop: 14, fontWeight: '700' },
+  hintCloseBtn: { backgroundColor: C.leafDark, borderRadius: 16, alignItems: 'center', paddingVertical: 14, marginTop: 16 },
+  hintCloseText: { color: C.cream, fontWeight: '900' },
 })
