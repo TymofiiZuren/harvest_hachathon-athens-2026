@@ -15,11 +15,16 @@ const PLANTNET_URL =
   `https://my-api.plantnet.org/v2/identify/k-world-flora?api-key=${PLANTNET_API_KEY}&include-related-images=true`
 const WIKI_SUMMARY = 'https://en.wikipedia.org/api/rest_v1/page/summary/'
 
-export async function identifyPlant(uri) {
+export async function identifyPlant(input) {
+  const asset = normalizeImageInput(input)
   let res
   try {
     const form = new FormData()
-    form.append('images', { uri, name: 'photo.jpg', type: 'image/jpeg' })
+    form.append('images', {
+      uri: asset.uri,
+      name: asset.fileName,
+      type: asset.mimeType,
+    })
     form.append('organs', 'auto')
     res = await fetch(PLANTNET_URL, { method: 'POST', body: form })
   } catch (err) {
@@ -50,7 +55,6 @@ export async function identifyPlant(uri) {
     family: (species.family && species.family.scientificNameWithoutAuthor) || '',
     confidence: Math.round((top.score || 0) * 100),
     image: (top.images && top.images[0] && top.images[0].url && top.images[0].url.m) || null,
-    emoji: '🌿',
     source: 'plantnet',
   }
 
@@ -60,6 +64,20 @@ export async function identifyPlant(uri) {
     description: enrich.description || '',
     image: base.image || enrich.image || null,
     wikiUrl: enrich.wikiUrl || '',
+  }
+}
+
+function normalizeImageInput(input) {
+  if (typeof input === 'string') {
+    return { uri: input, fileName: 'plant-photo.jpg', mimeType: 'image/jpeg' }
+  }
+
+  const mimeType = input?.mimeType || input?.type || 'image/jpeg'
+  const extension = mimeType.includes('png') ? 'png' : 'jpg'
+  return {
+    uri: input?.uri,
+    fileName: input?.fileName || `plant-photo.${extension}`,
+    mimeType,
   }
 }
 

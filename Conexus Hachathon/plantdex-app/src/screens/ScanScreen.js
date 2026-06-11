@@ -3,16 +3,25 @@ import {
   View, Text, TouchableOpacity, Image, ActivityIndicator, StyleSheet, ScrollView, Alert,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
+import * as ImageManipulator from 'expo-image-manipulator'
 import { identifyPlant } from '../services/plantnet'
 import ResultCard from './ResultCard'
+import { LESSON_TASKS, matchPlantToTask } from '../data/lessonTasks'
+import { CameraGlyph, PlantPlaceholder } from '../components/DesignElements'
+import { useCollection } from '../store/useCollection'
 import { C } from '../theme'
 
 export default function ScanScreen({ onGoCollection }) {
   const [status, setStatus] = useState('idle') // idle | scanning | result | notplant | error
   const [preview, setPreview] = useState(null)
   const [result, setResult] = useState(null)
+  const [taskStatus, setTaskStatus] = useState(null)
+  const activeTaskId = useCollection((s) => s.activeTaskId)
+  const lessonTasks = useCollection((s) => s.lessonTasks?.length ? s.lessonTasks : LESSON_TASKS)
+  const recordWrongTask = useCollection((s) => s.recordWrongTask)
+  const activeTask = lessonTasks.find((task) => task.id === activeTaskId) || lessonTasks[0]
 
-  async function pickFrom(launcher, requestPerm) {
+  async function pickFrom(launcher, requestPerm, source = 'camera') {
     const perm = await requestPerm()
     if (!perm.granted) {
       Alert.alert('No access', 'Please allow camera / gallery access in settings.')
@@ -20,16 +29,31 @@ export default function ScanScreen({ onGoCollection }) {
     }
     const res = await launcher({ quality: 0.6 })
     if (res.canceled) return
-    const asset = res.assets[0]
+    const asset = await prepareImageForPlantNet(res.assets[0])
     setPreview(asset.uri)
     setStatus('scanning')
     try {
-      const r = await identifyPlant(asset.uri)
+      const r = await identifyPlant(asset)
       if (r.notPlant) {
+        if (activeTask) {
+          recordWrongTask(activeTask, { commonName: 'Not a plant' }, asset.uri)
+          setTaskStatus({ correct: false, message: activeTask.failText, source })
+        }
         setStatus('notplant')
         return
       }
-      setResult(r)
+
+      const identified = { ...r, cameraPhoto: asset.uri, image: asset.uri }
+      if (activeTask) {
+        const correct = matchPlantToTask(identified, activeTask)
+        setTaskStatus({
+          correct,
+          message: correct ? activeTask.successText : activeTask.failText,
+          source,
+        })
+        if (!correct) recordWrongTask(activeTask, identified, asset.uri)
+      }
+      setResult(identified)
       setStatus('result')
     } catch (e) {
       setStatus('error')
@@ -37,32 +61,41 @@ export default function ScanScreen({ onGoCollection }) {
   }
 
   const takePhoto = () =>
-    pickFrom(ImagePicker.launchCameraAsync, ImagePicker.requestCameraPermissionsAsync)
+    pickFrom(ImagePicker.launchCameraAsync, ImagePicker.requestCameraPermissionsAsync, 'camera')
   const pickGallery = () =>
-    pickFrom(ImagePicker.launchImageLibraryAsync, ImagePicker.requestMediaLibraryPermissionsAsync)
+    pickFrom(ImagePicker.launchImageLibraryAsync, ImagePicker.requestMediaLibraryPermissionsAsync, 'gallery')
 
   function reset() {
     setStatus('idle')
     setResult(null)
     setPreview(null)
+    setTaskStatus(null)
   }
 
   return (
     <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
       {status === 'idle' && (
         <View style={s.center}>
-          <Text style={s.title}>Find a plant 🌱</Text>
+          {activeTask && (
+            <View style={s.taskBanner}>
+              <Text style={s.taskLabel}>Classroom task</Text>
+              <Text style={s.taskTitle}>{activeTask.title}</Text>
+              <Text style={s.taskDesc}>{activeTask.description}</Text>
+              <Text style={s.taskPoints}>{activeTask.points} pts / camera or gallery evidence</Text>
+            </View>
+          )}
+          <Text style={s.title}>Find a plant</Text>
           <Text style={s.subtitle}>
-            Photograph a leaf, a flower, or the whole plant — find out what it is and add it to your collection.
+            Take a photo or choose one from your gallery. Correct plant evidence earns points; wrong evidence makes the class garden lose health.
           </Text>
 
           <TouchableOpacity style={s.scanBtn} onPress={takePhoto} activeOpacity={0.85}>
-            <Text style={s.scanIcon}>📷</Text>
-            <Text style={s.scanLabel}>Scan</Text>
+            <CameraGlyph color={C.white} />
+            <Text style={s.scanLabel}>Scan plant</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={s.linkBtn} onPress={pickGallery}>
-            <Text style={s.linkText}>🖼  Pick from gallery</Text>
+            <Text style={s.linkText}>Pick from gallery</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -78,16 +111,23 @@ export default function ScanScreen({ onGoCollection }) {
       )}
 
       {status === 'result' && result && (
-        <ResultCard result={result} preview={preview} onScanAgain={reset} onGoCollection={onGoCollection} />
+        <ResultCard
+          result={result}
+          preview={preview}
+          activeTask={activeTask}
+          taskStatus={taskStatus}
+          onScanAgain={reset}
+          onGoCollection={onGoCollection}
+        />
       )}
 
       {status === 'notplant' && (
         <View style={s.center}>
           {preview && <Image source={{ uri: preview }} style={s.previewSmall} />}
-          <Text style={{ fontSize: 52 }}>🤔</Text>
-          <Text style={s.title}>That doesn't look like a plant</Text>
+          <PlantPlaceholder size={78} />
+          <Text style={s.title}>That does not look like a plant</Text>
           <Text style={s.subtitle}>
-            Point the camera at a single leaf or flower, fill the frame, and try again.
+            Bad outcome: the classroom seedling wilted. Point the camera at a single leaf or flower and try again.
           </Text>
           <TouchableOpacity style={s.scanBtnSmall} onPress={reset}>
             <Text style={s.scanLabel}>Try again</Text>
@@ -97,7 +137,7 @@ export default function ScanScreen({ onGoCollection }) {
 
       {status === 'error' && (
         <View style={s.center}>
-          <Text style={{ fontSize: 52 }}>😕</Text>
+          <PlantPlaceholder size={78} />
           <Text style={s.title}>Something went wrong</Text>
           <Text style={s.subtitle}>Check your connection and try again.</Text>
           <TouchableOpacity style={s.scanBtnSmall} onPress={reset}>
@@ -109,9 +149,45 @@ export default function ScanScreen({ onGoCollection }) {
   )
 }
 
+async function prepareImageForPlantNet(asset) {
+  try {
+    const largestSide = Math.max(asset.width || 0, asset.height || 0)
+    const resize = largestSide > 1600
+      ? [asset.width >= asset.height ? { resize: { width: 1600 } } : { resize: { height: 1600 } }]
+      : []
+
+    // Internet images saved to the gallery are often WEBP/PNG/HEIC or very large.
+    // Convert everything to a normal JPEG file so Pl@ntNet receives a format it reliably accepts.
+    const converted = await ImageManipulator.manipulateAsync(asset.uri, resize, {
+      compress: 0.85,
+      format: ImageManipulator.SaveFormat.JPEG,
+    })
+
+    return {
+      ...asset,
+      uri: converted.uri,
+      width: converted.width,
+      height: converted.height,
+      fileName: 'plant-photo.jpg',
+      mimeType: 'image/jpeg',
+    }
+  } catch (e) {
+    return {
+      ...asset,
+      fileName: asset.fileName || 'plant-photo.jpg',
+      mimeType: asset.mimeType || 'image/jpeg',
+    }
+  }
+}
+
 const s = StyleSheet.create({
   scroll: { padding: 20, paddingBottom: 40, flexGrow: 1 },
   center: { alignItems: 'center', paddingTop: 24 },
+  taskBanner: { width: '100%', backgroundColor: C.white, borderRadius: 20, padding: 16, borderWidth: 2, borderColor: 'rgba(58,157,93,0.22)', marginBottom: 18 },
+  taskLabel: { color: C.leafDark, fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
+  taskTitle: { color: C.bark, fontSize: 19, fontWeight: '900', marginTop: 4 },
+  taskDesc: { color: C.muted, marginTop: 5, lineHeight: 19 },
+  taskPoints: { color: C.bark, fontWeight: '800', marginTop: 8 },
   title: { fontSize: 22, fontWeight: '800', color: C.bark, marginTop: 8, textAlign: 'center' },
   subtitle: { fontSize: 14, color: C.muted, textAlign: 'center', marginTop: 6, maxWidth: 300, lineHeight: 20 },
   scanBtn: {
@@ -122,8 +198,7 @@ const s = StyleSheet.create({
   scanBtnSmall: {
     paddingHorizontal: 32, paddingVertical: 14, borderRadius: 999, backgroundColor: C.leaf, marginTop: 24,
   },
-  scanIcon: { fontSize: 48 },
-  scanLabel: { color: C.white, fontSize: 18, fontWeight: '800', marginTop: 6 },
+  scanLabel: { color: C.white, fontSize: 18, fontWeight: '900', marginTop: 12 },
   linkBtn: { marginTop: 28 },
   linkText: { color: C.leafDark, fontWeight: '700', fontSize: 15 },
   preview: { width: 240, height: 240, borderRadius: 28, marginBottom: 24 },
