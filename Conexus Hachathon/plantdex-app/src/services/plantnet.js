@@ -59,9 +59,14 @@ export async function identifyPlant(input) {
   }
 
   const enrich = await enrichWiki(base.scientificName, base.commonName)
+  // Wikipedia can still come back empty (no article, disambiguation, rate limit).
+  // Show a minimal fallback so the card never renders without any description.
+  const fallbackDesc = base.family
+    ? `${base.commonName} (${base.scientificName}), a species in the ${base.family} family.`
+    : `${base.commonName} (${base.scientificName}).`
   return {
     ...base,
-    description: enrich.description || '',
+    description: enrich.description || fallbackDesc,
     image: base.image || enrich.image || null,
     wikiUrl: enrich.wikiUrl || '',
   }
@@ -85,7 +90,9 @@ async function enrichWiki(scientificName, commonName) {
   for (const title of [scientificName, commonName]) {
     if (!title) continue
     try {
-      const res = await fetch(WIKI_SUMMARY + encodeURIComponent(title.replace(/ /g, '_')))
+      const res = await fetch(WIKI_SUMMARY + encodeURIComponent(title.replace(/ /g, '_')), {
+        headers: WIKI_HEADERS,
+      })
       if (!res.ok) continue
       const data = await res.json()
       if (data.type === 'disambiguation') continue
