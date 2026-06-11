@@ -14,6 +14,23 @@ function makeTaskId(title) {
   return `${slug || 'mission'}-${Date.now()}`
 }
 
+function mergeLessonTasks(savedTasks = []) {
+  const saved = Array.isArray(savedTasks) ? savedTasks : []
+  const savedById = new Map(saved.map((task) => [task.id, task]))
+  const builtInsWithSavedProgress = LESSON_TASKS.map((task) => ({
+    ...task,
+    ...(savedById.get(task.id) || {}),
+    // Always keep the newest built-in reference image/text for default missions.
+    targetImage: task.targetImage,
+    description: task.description,
+    hint: task.hint,
+    successText: task.successText,
+    failText: task.failText,
+  }))
+  const customTasks = saved.filter((task) => !LESSON_TASKS.some((builtIn) => builtIn.id === task.id))
+  return [...customTasks, ...builtInsWithSavedProgress]
+}
+
 export const useCollection = create(
   persist(
     (set, get) => ({
@@ -28,7 +45,6 @@ export const useCollection = create(
       gardenHealth: MAX_GARDEN_HEALTH,
 
       login: (user) => set({ currentUser: user }),
-      continueAsGuest: () => set({ currentUser: { name: 'Guest', role: 'guest' } }),
       logout: () => set({ currentUser: null }),
 
       setLessonInfo: (lesson) => set((s) => ({
@@ -48,14 +64,10 @@ export const useCollection = create(
           targetScientificNames: task.targetScientificNames || [],
           targetFamilies: task.targetFamilies || [],
           points: Number(task.points) || 100,
+          targetImage: task.targetImage || task.imageUrl || '',
           hint: task.hint || 'Look closely at the leaf shape, flower, stem, and surrounding habitat.',
           successText: task.successText || 'Correct evidence. The plant observation supports the lesson goal.',
           failText: task.failText || 'Incorrect evidence. The class garden loses health; observe and try again.',
-          quiz: {
-            question: task.quiz?.question || task.question || 'What feature helped you identify this plant?',
-            choices: task.quiz?.choices || task.choices || ['Leaves', 'Flowers', 'Stem', 'Habitat'],
-            answer: task.quiz?.answer || task.answer || 'Leaves',
-          },
         }
         set((s) => ({
           lessonTasks: [newTask, ...(s.lessonTasks || LESSON_TASKS)],
@@ -65,6 +77,21 @@ export const useCollection = create(
       },
 
       setActiveTask: (taskId) => set({ activeTaskId: taskId }),
+
+      deleteLessonTask: (taskId) => {
+        set((s) => {
+          const remaining = (s.lessonTasks || LESSON_TASKS).filter((task) => task.id !== taskId)
+          const nextTasks = remaining.length ? remaining : LESSON_TASKS
+          const nextCompleted = { ...(s.completedTasks || {}) }
+          delete nextCompleted[taskId]
+          return {
+            lessonTasks: nextTasks,
+            completedTasks: nextCompleted,
+            taskAttempts: (s.taskAttempts || []).filter((attempt) => attempt.taskId !== taskId),
+            activeTaskId: s.activeTaskId === taskId ? nextTasks[0].id : s.activeTaskId,
+          }
+        })
+      },
 
       addSighting: (plant) => {
         const key = plant.scientificName || plant.commonName || `plant-${Date.now()}`
@@ -150,6 +177,12 @@ export const useCollection = create(
     {
       name: 'plantdex-collection',
       storage: createJSONStorage(() => AsyncStorage),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted || {}),
+        classroom: { ...CLASSROOM, ...((persisted && persisted.classroom) || {}) },
+        lessonTasks: mergeLessonTasks(persisted && persisted.lessonTasks),
+      }),
     }
   )
 )
