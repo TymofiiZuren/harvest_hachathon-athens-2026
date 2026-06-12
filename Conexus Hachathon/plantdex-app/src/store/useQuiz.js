@@ -36,7 +36,7 @@ export const useQuiz = create(
           title: String(draft.title || '').trim() || 'Untitled quiz',
           topic: String(draft.topic || '').trim() || 'Custom',
           emoji: draft.emoji || '📝',
-          accent: draft.accent || '#3a9d5d',
+          accent: draft.accent || '#4ADE80',
           description: String(draft.description || '').trim() || 'Teacher-created quiz.',
           custom: true,
           questions: cleanQuestions.length

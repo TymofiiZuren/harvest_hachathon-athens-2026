@@ -1,10 +1,14 @@
 import { useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Modal } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Image } from 'react-native'
 import { CLASSROOM, LESSON_TASKS, missionImageForTask } from '../data/lessonTasks'
-import { getAchievements } from '../data/achievements'
-import { useCollection } from '../store/useCollection'
-import { AchievementGlyph, PlantPlaceholder, StatusDot } from '../components/DesignElements'
-import { C } from '../theme'
+import { useCollection, dayKey } from '../store/useCollection'
+import { PlantPlaceholder, StatusDot } from '../components/DesignElements'
+import { StreakTile } from '../components/StreakFlame'
+import { Press, Btn, Sheet, Tile, Tag } from '../components/ui'
+import { T, F } from '../theme'
+
+// Demo bonus added to each roster student per completed class mission.
+const STUDENT_MISSION_BONUS = 20
 
 export default function ClassroomScreen({ role = 'student', onGoScan, onGoDashboard }) {
   const collectionState = useCollection()
@@ -14,7 +18,10 @@ export default function ClassroomScreen({ role = 'student', onGoScan, onGoDashbo
   const setActiveTask = collectionState.setActiveTask
   const completedTasks = collectionState.completedTasks || {}
   const gardenHealth = collectionState.gardenHealth ?? 3
-  const achievements = getAchievements(collectionState)
+  const points = collectionState.points || 0
+  const dexCount = Object.keys(collectionState.plants || {}).length
+  const taskStreak = collectionState.taskStreak || 0
+  const litToday = (collectionState.lastTaskDay || '') === dayKey(Date.now())
   const activeTask = lessonTasks.find((task) => task.id === activeTaskId) || lessonTasks[0]
 
   function chooseTask(taskId) {
@@ -23,15 +30,11 @@ export default function ClassroomScreen({ role = 'student', onGoScan, onGoDashbo
   }
 
   return (
-    <ScrollView contentContainerStyle={s.scroll}>
-      <View style={s.lessonCard}>
-        <View style={s.lessonTop}>
-          <Text style={s.className}>{classroom.name}</Text>
-          <Text style={s.code}>{classroom.code}</Text>
-        </View>
-        <Text style={s.topic}>{classroom.topic}</Text>
-        <Text style={s.title}>{classroom.title}</Text>
-        <Text style={s.lessonDesc}>{classroom.description}</Text>
+    <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <View style={s.headerBlock}>
+        <Text style={F.micro}>{classroom.name} · {classroom.code}</Text>
+        <Text style={[F.display, s.headerTitle]}>{classroom.title}</Text>
+        <Text style={F.body}>{classroom.description}</Text>
       </View>
 
       {role === 'teacher' ? (
@@ -48,7 +51,10 @@ export default function ClassroomScreen({ role = 'student', onGoScan, onGoDashbo
           activeTask={activeTask}
           completedTasks={completedTasks}
           gardenHealth={gardenHealth}
-          achievements={achievements}
+          points={points}
+          dexCount={dexCount}
+          taskStreak={taskStreak}
+          litToday={litToday}
           lessonTasks={lessonTasks}
           chooseTask={chooseTask}
           onGoScan={onGoScan}
@@ -58,59 +64,60 @@ export default function ClassroomScreen({ role = 'student', onGoScan, onGoDashbo
   )
 }
 
-function StudentPanel({ activeTask, completedTasks, gardenHealth, achievements, lessonTasks, chooseTask, onGoScan }) {
-  const unlocked = achievements.filter((achievement) => achievement.unlocked)
+function StudentPanel({ activeTask, completedTasks, gardenHealth, points, dexCount, taskStreak, litToday, lessonTasks, chooseTask, onGoScan }) {
   const [hintOpen, setHintOpen] = useState(false)
+
   return (
     <>
-      <View style={s.activeMission}>
-        <View style={s.sectionHeader}>
-          <Text style={s.section}>Current mission</Text>
-          <View style={s.missionControls}>
-            <TouchableOpacity style={s.infoBtn} onPress={() => setHintOpen(true)} activeOpacity={0.82}>
-              <Text style={s.infoText}>i</Text>
-            </TouchableOpacity>
-            <View style={s.pointsChip}><Text style={s.pointsText}>{activeTask.points} pts</Text></View>
-          </View>
-        </View>
-        <Text style={s.missionTitle}>{activeTask.title}</Text>
-        <Text style={s.desc}>{activeTask.description}</Text>
-        <Text style={s.hint}>Field note: {activeTask.hint}</Text>
-        <TouchableOpacity style={s.primaryBtn} onPress={onGoScan} activeOpacity={0.85}>
-          <Text style={s.primaryText}>Add photo evidence</Text>
-        </TouchableOpacity>
-        <HealthMeter value={gardenHealth} />
+      <View style={s.statsRow}>
+        <Tile value={points} label="Points" tone="gold" />
+        <Tile value={dexCount} label="Dex" tone="accent" />
+        <StreakTile streak={taskStreak} lit={litToday} />
+        <Tile value={`${gardenHealth}/3`} label="Garden" />
       </View>
 
-      <Text style={s.section}>Lesson tasks</Text>
+      <View style={s.missionCard}>
+        <View style={s.missionTop}>
+          <Tag label="LIVE MISSION" tone="accent" />
+          <Tag label={`+${activeTask.points} pts`} tone="gold" />
+        </View>
+        <Text style={s.missionTitle}>{activeTask.title}</Text>
+        <Text style={F.body}>{activeTask.description}</Text>
+
+        <View style={s.healthRow}>
+          <Text style={s.healthLabel}>Class garden</Text>
+          <View style={s.healthBars}>
+            {[0, 1, 2].map((n) => (
+              <View key={n} style={[s.healthBar, n < gardenHealth && s.healthBarOn]} />
+            ))}
+          </View>
+        </View>
+
+        <View style={s.missionActions}>
+          <Btn label="Open camera" onPress={onGoScan} style={s.flexBtn} />
+          <Btn label="Hint" kind="raised" onPress={() => setHintOpen(true)} style={s.hintBtn} />
+        </View>
+      </View>
+
+      <Text style={s.section}>Missions</Text>
       {lessonTasks.map((task) => {
         const done = !!completedTasks[task.id]
         const active = task.id === activeTask.id
         return (
-          <TouchableOpacity key={task.id} style={[s.taskRow, active && s.taskActive]} onPress={() => chooseTask(task.id)}>
+          <Press key={task.id} style={[s.taskRow, active && s.taskRowActive]} onPress={() => chooseTask(task.id)}>
             <StatusDot status={done ? 'done' : active ? 'active' : 'neutral'} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.taskTitle}>{task.title}</Text>
-              <Text style={s.taskMeta}>{task.topic} / {task.points} points</Text>
+            <View style={s.flex1}>
+              <Text style={F.bodyStrong}>{task.title}</Text>
+              <Text style={s.taskMeta}>{task.topic} · {task.points} pts</Text>
             </View>
-            <Text style={s.taskAction}>{done ? 'Done' : active ? 'Live' : 'Start'}</Text>
-          </TouchableOpacity>
+            <Text style={[s.taskState, done && { color: T.c.accent }, active && !done && { color: T.c.gold }]}>
+              {done ? 'Done' : active ? 'Live' : 'Start'}
+            </Text>
+          </Press>
         )
       })}
 
-      <HintModal task={activeTask} visible={hintOpen} onClose={() => setHintOpen(false)} />
-
-      <Text style={s.section}>Achievements</Text>
-      <View style={s.achievementRow}>
-        {unlocked.length === 0 ? (
-          <Text style={s.empty}>Complete a mission to unlock your first achievement.</Text>
-        ) : unlocked.map((achievement) => (
-          <View key={achievement.id} style={s.badge}>
-            <AchievementGlyph unlocked />
-            <Text style={s.badgeText}>{achievement.title}</Text>
-          </View>
-        ))}
-      </View>
+      <HintSheet task={activeTask} visible={hintOpen} onClose={() => setHintOpen(false)} />
     </>
   )
 }
@@ -119,177 +126,111 @@ function TeacherPanel({ activeTask, completedTasks, lessonTasks, classroom, choo
   const completedCount = Object.keys(completedTasks).length
   return (
     <>
-      <View style={s.teacherCard}>
-        <Text style={s.section}>Teacher overview</Text>
-        <Text style={s.desc}>The live task controls what students see on the scan screen. Use the dashboard to edit the lesson and create more missions.</Text>
-        <Text style={s.activeLabel}>Live mission: {activeTask.title}</Text>
-        <TouchableOpacity style={s.secondaryBtn} onPress={onGoDashboard}>
-          <Text style={s.secondaryText}>Open lesson dashboard</Text>
-        </TouchableOpacity>
+      <View style={s.statsRow}>
+        <Tile value={lessonTasks.length} label="Missions" tone="accent" />
+        <Tile value={completedCount} label="Done" />
+        <Tile value={classroom.students?.length || 0} label="Students" />
       </View>
 
-      <View style={s.metricsRow}>
-        <Metric label="Missions" value={lessonTasks.length} />
-        <Metric label="Completed" value={completedCount} />
-        <Metric label="Students" value={classroom.students?.length || 0} />
+      <View style={s.missionCard}>
+        <Tag label="LIVE MISSION" tone="accent" />
+        <Text style={s.missionTitle}>{activeTask.title}</Text>
+        <Text style={F.body}>
+          The live mission controls what students see on their scan screen. Manage the lesson and
+          create missions from the dashboard.
+        </Text>
+        <Btn label="Open dashboard" onPress={onGoDashboard} style={{ marginTop: 16 }} />
       </View>
 
       <Text style={s.section}>Mission bank</Text>
-      {lessonTasks.map((task) => (
-        <View key={task.id} style={[s.teacherTask, task.id === activeTask.id && s.teacherTaskActive]}>
-          <MissionImage task={task} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.taskTitle}>{task.title}</Text>
-            <Text style={s.taskMeta}>{task.topic} / {task.points} points</Text>
-            <Text style={s.desc}>{task.description}</Text>
-            <Text style={s.hint}>Target: {(task.targetCommonNames || task.targetScientificNames || ['Plant'])[0]}</Text>
+      {lessonTasks.map((task) => {
+        const active = task.id === activeTask.id
+        return (
+          <View key={task.id} style={[s.taskRow, active && s.taskRowActive]}>
+            <MissionThumb task={task} />
+            <View style={s.flex1}>
+              <Text style={F.bodyStrong}>{task.title}</Text>
+              <Text style={s.taskMeta}>{task.topic} · {task.points} pts</Text>
+            </View>
+            <Btn
+              label={active ? 'Live' : 'Set live'}
+              kind={active ? 'primary' : 'raised'}
+              small
+              onPress={() => chooseTask(task.id)}
+            />
           </View>
-          <TouchableOpacity style={s.setBtn} onPress={() => chooseTask(task.id)}>
-            <Text style={s.setText}>{task.id === activeTask.id ? 'Live' : 'Set'}</Text>
-          </TouchableOpacity>
-        </View>
-      ))}
+        )
+      })}
 
-      <Text style={s.section}>Classroom students</Text>
+      <Text style={s.section}>Leaderboard</Text>
       {(classroom.students || []).map((student, index) => (
         <View key={student.id} style={s.studentRow}>
-          <Text style={s.rank}>#{index + 1}</Text>
-          <Text style={s.studentName}>{student.name}</Text>
-          <Text style={s.studentPoints}>{student.points + completedCount * 20} pts</Text>
+          <Text style={s.rank}>{index + 1}</Text>
+          <Text style={[F.bodyStrong, s.flex1]}>{student.name}</Text>
+          <Text style={s.studentPts}>{student.points + completedCount * STUDENT_MISSION_BONUS} pts</Text>
         </View>
       ))}
     </>
   )
 }
 
-function HintModal({ task, visible, onClose }) {
-  const image = missionImageForTask(task)
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={s.modalShade}>
-        <View style={s.hintCard}>
-          <View style={s.hintTopRow}>
-            <Text style={s.hintTitle}>Plant hint</Text>
-            <TouchableOpacity style={s.closeCircle} onPress={onClose}>
-              <Text style={s.closeCircleText}>×</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={s.hintPlantName}>{task?.title}</Text>
-          {image ? (
-            <Image source={{ uri: image }} style={s.hintImage} resizeMode="contain" />
-          ) : (
-            <View style={s.hintImage}><PlantPlaceholder size={92} /></View>
-          )}
-          <Text style={s.hintText}>{task?.hint}</Text>
-          <TouchableOpacity style={s.hintCloseBtn} onPress={onClose}>
-            <Text style={s.hintCloseText}>Back to mission</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  )
-}
-
-function MissionImage({ task, large = false }) {
+function MissionThumb({ task }) {
   const image = missionImageForTask(task)
   if (!image) {
     return (
-      <View style={large ? s.missionImageLarge : s.missionThumb}>
-        <PlantPlaceholder size={large ? 88 : 36} />
+      <View style={s.thumb}>
+        <PlantPlaceholder size={34} />
       </View>
     )
   }
-  return <Image source={{ uri: image }} style={large ? s.missionImageLarge : s.missionThumb} resizeMode="contain" />
+  return <Image source={{ uri: image }} style={s.thumb} resizeMode="cover" />
 }
 
-function Metric({ label, value }) {
+function HintSheet({ task, visible, onClose }) {
+  const image = missionImageForTask(task)
   return (
-    <View style={s.metric}>
-      <Text style={s.metricValue}>{value}</Text>
-      <Text style={s.metricLabel}>{label}</Text>
-    </View>
-  )
-}
-
-function HealthMeter({ value }) {
-  return (
-    <View style={s.healthWrap}>
-      <Text style={s.healthLabel}>Class garden health</Text>
-      <View style={s.healthBars}>
-        {[0, 1, 2].map((n) => <View key={n} style={[s.healthBar, n < value && s.healthBarOn]} />)}
-      </View>
-    </View>
+    <Sheet visible={visible} onClose={onClose}>
+      <Text style={F.micro}>What to look for</Text>
+      <Text style={[F.h1, { marginTop: 4 }]}>{task?.title}</Text>
+      {image ? (
+        <Image source={{ uri: image }} style={s.hintImage} resizeMode="cover" />
+      ) : (
+        <View style={[s.hintImage, s.hintImageEmpty]}>
+          <PlantPlaceholder size={84} />
+        </View>
+      )}
+      <Text style={[F.body, { marginTop: 14 }]}>{task?.hint}</Text>
+      <Btn label="Got it" onPress={onClose} style={{ marginTop: 18 }} />
+    </Sheet>
   )
 }
 
 const s = StyleSheet.create({
-  scroll: { padding: 16, paddingBottom: 40 },
-  lessonCard: { backgroundColor: C.barkDark, borderRadius: 28, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
-  lessonTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  className: { color: C.cream, fontWeight: '900', fontSize: 16 },
-  code: { color: C.barkDark, backgroundColor: C.sun, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, fontWeight: '900', fontSize: 12 },
-  topic: { color: C.leafLight, fontWeight: '900', marginTop: 14, textTransform: 'uppercase', fontSize: 12, letterSpacing: 0.7 },
-  title: { color: C.cream, fontWeight: '900', fontSize: 26, marginTop: 5 },
-  lessonDesc: { color: 'rgba(246,244,236,0.78)', lineHeight: 20, marginTop: 8 },
-  activeMission: { backgroundColor: C.white, borderRadius: 24, padding: 17, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(58,157,93,0.18)' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  section: { color: C.bark, fontSize: 18, fontWeight: '900', marginBottom: 10, marginTop: 4 },
-  missionControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  infoBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.leafDark, alignItems: 'center', justifyContent: 'center' },
-  infoText: { color: C.cream, fontWeight: '900', fontSize: 16, fontStyle: 'italic' },
-  pointsChip: { backgroundColor: 'rgba(244,185,66,0.25)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  pointsText: { color: C.bark, fontWeight: '900', fontSize: 12 },
-  missionTitle: { color: C.bark, fontWeight: '900', fontSize: 22 },
-  missionImageLarge: { width: '100%', height: 170, borderRadius: 18, backgroundColor: '#e3f0e6', marginTop: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  missionThumb: { width: 58, height: 58, borderRadius: 14, backgroundColor: '#e3f0e6', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginRight: 10 },
-  modalShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 22 },
-  hintCard: { backgroundColor: C.white, borderRadius: 26, padding: 18, maxHeight: '86%' },
-  hintTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  hintTitle: { color: C.leafDark, fontWeight: '900', textTransform: 'uppercase', fontSize: 12, letterSpacing: 0.8 },
-  closeCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.cream, alignItems: 'center', justifyContent: 'center' },
-  closeCircleText: { color: C.bark, fontSize: 22, fontWeight: '900', lineHeight: 24 },
-  hintPlantName: { color: C.bark, fontWeight: '900', fontSize: 22, marginTop: 8 },
-  hintImage: { width: '100%', height: 230, borderRadius: 18, backgroundColor: '#e3f0e6', marginTop: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  hintText: { color: C.muted, lineHeight: 21, marginTop: 14, fontWeight: '700' },
-  hintCloseBtn: { backgroundColor: C.leafDark, borderRadius: 16, alignItems: 'center', paddingVertical: 14, marginTop: 16 },
-  hintCloseText: { color: C.cream, fontWeight: '900' },
-  desc: { color: C.muted, lineHeight: 20, marginTop: 6 },
-  hint: { color: C.leafDark, fontWeight: '800', marginTop: 11, lineHeight: 20 },
-  quiz: { color: C.bark, marginTop: 11, fontWeight: '800' },
-  choiceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  choiceChip: { width: '48%', backgroundColor: '#f4efe3', borderRadius: 13, padding: 10, borderWidth: 1, borderColor: C.line },
-  choiceText: { color: C.bark, fontWeight: '800', textAlign: 'center', fontSize: 12 },
-  answer: { color: C.leafDark, marginTop: 6, fontWeight: '900' },
-  primaryBtn: { backgroundColor: C.leafDark, borderRadius: 18, alignItems: 'center', paddingVertical: 15, marginTop: 16 },
-  primaryText: { color: C.cream, fontWeight: '900', fontSize: 16 },
-  secondaryBtn: { backgroundColor: C.leafDark, borderRadius: 16, alignItems: 'center', paddingVertical: 13, marginTop: 14 },
-  secondaryText: { color: C.cream, fontWeight: '900' },
-  healthWrap: { marginTop: 14 },
-  healthLabel: { color: C.bark, fontWeight: '900', marginBottom: 7, textAlign: 'center' },
-  healthBars: { flexDirection: 'row', gap: 6 },
-  healthBar: { flex: 1, height: 9, borderRadius: 999, backgroundColor: '#ddd5c8' },
-  healthBarOn: { backgroundColor: C.leaf },
-  taskRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.white, borderRadius: 17, padding: 13, marginBottom: 10, borderWidth: 1, borderColor: C.line },
-  taskActive: { borderColor: C.sun, backgroundColor: '#fffaf0' },
-  taskTitle: { color: C.bark, fontWeight: '900', fontSize: 15 },
-  taskMeta: { color: C.muted, fontWeight: '800', marginTop: 2, fontSize: 12 },
-  taskAction: { color: C.leafDark, fontWeight: '900', fontSize: 12 },
-  achievementRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  badge: { width: '47%', backgroundColor: C.white, borderRadius: 17, padding: 12, alignItems: 'center' },
-  badgeText: { color: C.bark, fontWeight: '800', textAlign: 'center', marginTop: 7, fontSize: 12 },
-  empty: { color: C.muted, lineHeight: 20 },
-  teacherCard: { backgroundColor: C.white, borderRadius: 22, padding: 16, marginBottom: 14 },
-  activeLabel: { marginTop: 10, color: C.leafDark, fontWeight: '900' },
-  metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  metric: { flex: 1, backgroundColor: C.white, borderRadius: 18, padding: 13, alignItems: 'center' },
-  metricValue: { color: C.bark, fontSize: 22, fontWeight: '900' },
-  metricLabel: { color: C.muted, fontWeight: '800', fontSize: 12, marginTop: 2 },
-  teacherTask: { flexDirection: 'row', gap: 10, backgroundColor: C.white, borderRadius: 18, padding: 13, marginBottom: 10, borderWidth: 1, borderColor: C.line },
-  teacherTaskActive: { borderColor: C.sun, backgroundColor: '#fffaf0' },
-  setBtn: { alignSelf: 'center', backgroundColor: C.bark, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  setText: { color: C.cream, fontWeight: '900' },
-  studentRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.white, borderRadius: 15, padding: 13, marginBottom: 8 },
-  rank: { color: C.leafDark, fontWeight: '900', width: 36 },
-  studentName: { flex: 1, color: C.bark, fontWeight: '800' },
-  studentPoints: { color: C.sun, fontWeight: '900' },
+  scroll: { padding: 18, paddingBottom: 120 },
+  headerBlock: { marginBottom: 18 },
+  headerTitle: { marginTop: 6, marginBottom: 6 },
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  missionCard: { backgroundColor: T.c.surface, borderRadius: T.r.lg, borderWidth: 1, borderColor: 'rgba(74,222,128,0.22)', padding: 18, marginBottom: 22 },
+  missionTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  missionTitle: { ...F.h1, marginTop: 12, marginBottom: 6 },
+  healthRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
+  healthLabel: { ...F.micro },
+  healthBars: { flex: 1, flexDirection: 'row', gap: 5 },
+  healthBar: { flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)' },
+  healthBarOn: { backgroundColor: T.c.accent },
+  missionActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  flexBtn: { flex: 1 },
+  hintBtn: { paddingHorizontal: 22 },
+  section: { ...F.h2, marginBottom: 10, marginTop: 6 },
+  taskRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.c.surface, borderRadius: T.r.md, borderWidth: 1, borderColor: T.c.line, padding: 14, marginBottom: 8, gap: 10 },
+  taskRowActive: { borderColor: 'rgba(245,192,78,0.4)' },
+  taskMeta: { ...F.body, fontSize: 12, marginTop: 1 },
+  taskState: { fontSize: 12, fontWeight: '800', color: T.c.faint },
+  flex1: { flex: 1 },
+  studentRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.c.surface, borderRadius: T.r.md, borderWidth: 1, borderColor: T.c.line, padding: 13, marginBottom: 8, gap: 12 },
+  rank: { width: 26, height: 26, borderRadius: 13, backgroundColor: T.c.accentSoft, color: T.c.accent, fontWeight: '800', fontSize: 12, textAlign: 'center', lineHeight: 26, overflow: 'hidden' },
+  studentPts: { color: T.c.gold, fontWeight: '800', fontSize: 13 },
+  thumb: { width: 46, height: 46, borderRadius: 12, backgroundColor: T.c.photo, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  hintImage: { width: '100%', height: 210, borderRadius: T.r.md, backgroundColor: T.c.photo, marginTop: 14 },
+  hintImageEmpty: { alignItems: 'center', justifyContent: 'center' },
 })

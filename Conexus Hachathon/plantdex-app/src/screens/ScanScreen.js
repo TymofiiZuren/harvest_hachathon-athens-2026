@@ -1,15 +1,14 @@
-import { useState } from 'react'
-import {
-  View, Text, TouchableOpacity, Image, ActivityIndicator, StyleSheet, ScrollView, Alert, Modal,
-} from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { View, Text, Image, ActivityIndicator, StyleSheet, ScrollView, Alert, Animated } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { identifyPlant } from '../services/plantnet'
 import ResultCard from './ResultCard'
 import { LESSON_TASKS, matchPlantToTask, missionImageForTask } from '../data/lessonTasks'
 import { CameraGlyph, PlantPlaceholder } from '../components/DesignElements'
+import { Press, Btn, Sheet, Tag } from '../components/ui'
 import { useCollection } from '../store/useCollection'
-import { C } from '../theme'
+import { T, F } from '../theme'
 
 export default function ScanScreen({ onGoCollection, freeScan = false }) {
   const [status, setStatus] = useState('idle') // idle | scanning | result | notplant | error
@@ -17,22 +16,32 @@ export default function ScanScreen({ onGoCollection, freeScan = false }) {
   const [result, setResult] = useState(null)
   const [taskStatus, setTaskStatus] = useState(null)
   const [hintOpen, setHintOpen] = useState(false)
+  // Students choose what a scan counts for: the live class mission, or a
+  // personal scan that just grows their own dex (no mission, no garden risk).
+  const [scanMode, setScanMode] = useState('mission') // mission | me
   const activeTaskId = useCollection((s) => s.activeTaskId)
   const lessonTasks = useCollection((s) => s.lessonTasks?.length ? s.lessonTasks : LESSON_TASKS)
   const recordWrongTask = useCollection((s) => s.recordWrongTask)
-  // In free mode (guests / casual use) the scanner is a plain plant identifier
-  // with no classroom mission attached.
-  const activeTask = freeScan ? null : (lessonTasks.find((task) => task.id === activeTaskId) || lessonTasks[0])
+  // In free mode (guests / casual use / "just for me" scans) the scanner is a
+  // plain plant identifier with no classroom mission attached.
+  const personal = freeScan || scanMode === 'me'
+  const activeTask = personal ? null : (lessonTasks.find((task) => task.id === activeTaskId) || lessonTasks[0])
 
   async function pickFrom(launcher, requestPerm, source = 'camera') {
-    const perm = await requestPerm()
-    if (!perm.granted) {
-      Alert.alert('No access', 'Please allow camera / gallery access in settings.')
+    let asset
+    try {
+      const perm = await requestPerm()
+      if (!perm.granted) {
+        Alert.alert('No access', 'Please allow camera / gallery access in settings.')
+        return
+      }
+      const res = await launcher({ quality: 0.6 })
+      if (res.canceled) return
+      asset = await prepareImageForPlantNet(res.assets[0])
+    } catch (e) {
+      Alert.alert('Camera problem', 'Could not open the camera or gallery. Please try again.')
       return
     }
-    const res = await launcher({ quality: 0.6 })
-    if (res.canceled) return
-    const asset = await prepareImageForPlantNet(res.assets[0])
     setPreview(asset.uri)
     setStatus('scanning')
     try {
@@ -76,48 +85,60 @@ export default function ScanScreen({ onGoCollection, freeScan = false }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       {status === 'idle' && (
         <View style={s.center}>
-          {activeTask && (
-            <View style={s.taskBanner}>
-              <View style={s.taskTopRow}>
-                <Text style={s.taskLabel}>Classroom task</Text>
-                <TouchableOpacity style={s.infoBtn} onPress={() => setHintOpen(true)}>
-                  <Text style={s.infoText}>i</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={s.taskTitle}>{activeTask.title}</Text>
-              <Text style={s.taskDesc}>{activeTask.description}</Text>
-              <Text style={s.taskPoints}>{activeTask.points} pts / camera or gallery evidence</Text>
+          {!freeScan && (
+            <View style={s.modeRow}>
+              <Press
+                style={[s.modeBtn, scanMode === 'mission' && s.modeBtnOn]}
+                onPress={() => setScanMode('mission')}
+              >
+                <Text style={[s.modeText, scanMode === 'mission' && s.modeTextOn]}>Class mission</Text>
+              </Press>
+              <Press
+                style={[s.modeBtn, scanMode === 'me' && s.modeBtnOn]}
+                onPress={() => setScanMode('me')}
+              >
+                <Text style={[s.modeText, scanMode === 'me' && s.modeTextOn]}>Just for me</Text>
+              </Press>
             </View>
           )}
-          <Text style={s.title}>Find a plant</Text>
-          <Text style={s.subtitle}>
+
+          {activeTask && (
+            <Press style={s.missionPill} onPress={() => setHintOpen(true)}>
+              <Tag label={`+${activeTask.points}`} tone="gold" />
+              <View style={s.flex1}>
+                <Text style={F.bodyStrong} numberOfLines={1}>{activeTask.title}</Text>
+                <Text style={s.missionPillSub} numberOfLines={1}>{activeTask.description}</Text>
+              </View>
+              <View style={s.infoDot}><Text style={s.infoDotText}>i</Text></View>
+            </Press>
+          )}
+
+          <Text style={[F.display, s.title]}>Find a plant</Text>
+          <Text style={[F.body, s.subtitle]}>
             {freeScan
-              ? 'Take a photo or choose one from your gallery to identify any plant and add it to your collection.'
-              : 'Take a photo or choose one from your gallery. Correct plant evidence earns points; wrong evidence makes the class garden lose health.'}
+              ? 'Point the camera at any plant to identify it and add it to your collection.'
+              : personal
+                ? 'Personal scan — anything you find goes straight to your own dex. No mission, no garden risk.'
+                : 'Correct evidence earns points. Wrong evidence wilts the class garden.'}
           </Text>
 
-          <TouchableOpacity style={s.scanBtn} onPress={takePhoto} activeOpacity={0.85}>
-            <CameraGlyph color={C.white} />
-            <Text style={s.scanLabel}>Scan plant</Text>
-          </TouchableOpacity>
+          <ScanButton onPress={takePhoto} />
 
-          <TouchableOpacity style={s.linkBtn} onPress={pickGallery}>
-            <Text style={s.linkText}>Pick from gallery</Text>
-          </TouchableOpacity>
+          <Btn label="Choose from gallery" kind="ghost" onPress={pickGallery} style={{ marginTop: 18 }} />
         </View>
       )}
 
-      {activeTask && <TaskHintModal task={activeTask} visible={hintOpen} onClose={() => setHintOpen(false)} />}
+      {activeTask && <HintSheet task={activeTask} visible={hintOpen} onClose={() => setHintOpen(false)} />}
 
       {status === 'scanning' && (
         <View style={s.center}>
           {preview && <Image source={{ uri: preview }} style={s.preview} />}
-          <View style={s.row}>
-            <ActivityIndicator color={C.leafDark} size="large" />
-            <Text style={s.scanningText}>Identifying plant…</Text>
+          <View style={s.scanningRow}>
+            <ActivityIndicator color={T.c.accent} size="small" />
+            <Text style={s.scanningText}>Identifying…</Text>
           </View>
         </View>
       )}
@@ -136,58 +157,78 @@ export default function ScanScreen({ onGoCollection, freeScan = false }) {
       {status === 'notplant' && (
         <View style={s.center}>
           {preview && <Image source={{ uri: preview }} style={s.previewSmall} />}
-          <PlantPlaceholder size={78} />
-          <Text style={s.title}>That does not look like a plant</Text>
-          <Text style={s.subtitle}>
-            {freeScan
-              ? 'Point the camera at a single leaf or flower, fill the frame, and try again.'
-              : 'Bad outcome: the classroom seedling wilted. Point the camera at a single leaf or flower and try again.'}
+          <PlantPlaceholder size={72} />
+          <Text style={[F.h1, s.stateTitle]}>That doesn't look like a plant</Text>
+          <Text style={[F.body, s.subtitle]}>
+            {personal
+              ? 'Fill the frame with a single leaf or flower and try again.'
+              : 'The class seedling wilted. Fill the frame with one leaf or flower and retry.'}
           </Text>
-          <TouchableOpacity style={s.scanBtnSmall} onPress={reset}>
-            <Text style={s.scanLabel}>Try again</Text>
-          </TouchableOpacity>
+          <Btn label="Try again" onPress={reset} style={s.stateBtn} />
         </View>
       )}
 
       {status === 'error' && (
         <View style={s.center}>
-          <PlantPlaceholder size={78} />
-          <Text style={s.title}>Something went wrong</Text>
-          <Text style={s.subtitle}>Check your connection and try again.</Text>
-          <TouchableOpacity style={s.scanBtnSmall} onPress={reset}>
-            <Text style={s.scanLabel}>Try again</Text>
-          </TouchableOpacity>
+          <PlantPlaceholder size={72} />
+          <Text style={[F.h1, s.stateTitle]}>Something went wrong</Text>
+          <Text style={[F.body, s.subtitle]}>Check your connection and try again.</Text>
+          <Btn label="Try again" onPress={reset} style={s.stateBtn} />
         </View>
       )}
     </ScrollView>
   )
 }
 
-function TaskHintModal({ task, visible, onClose }) {
+// Big circular shutter with a slow pulsing halo.
+function ScanButton({ onPress }) {
+  const pulse = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2000, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [])
+
+  return (
+    <View style={s.shutterWrap}>
+      <Animated.View
+        style={[
+          s.halo,
+          {
+            opacity: pulse.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.35, 0.08, 0] }),
+            transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.45] }) }],
+          },
+        ]}
+      />
+      <Press style={s.shutter} onPress={onPress}>
+        <CameraGlyph color={T.c.onAccent} />
+        <Text style={s.shutterText}>Scan</Text>
+      </Press>
+    </View>
+  )
+}
+
+function HintSheet({ task, visible, onClose }) {
   const image = missionImageForTask(task)
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={s.modalShade}>
-        <View style={s.hintCard}>
-          <View style={s.hintTopRow}>
-            <Text style={s.hintLabel}>Plant hint</Text>
-            <TouchableOpacity style={s.closeCircle} onPress={onClose}>
-              <Text style={s.closeCircleText}>×</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={s.hintTitle}>{task.title}</Text>
-          {image ? (
-            <Image source={{ uri: image }} style={s.hintImage} resizeMode="contain" />
-          ) : (
-            <View style={s.hintImage}><PlantPlaceholder size={92} /></View>
-          )}
-          <Text style={s.hintBody}>{task.hint}</Text>
-          <TouchableOpacity style={s.hintCloseBtn} onPress={onClose}>
-            <Text style={s.hintCloseText}>Back to scan</Text>
-          </TouchableOpacity>
+    <Sheet visible={visible} onClose={onClose}>
+      <Text style={F.micro}>What to look for</Text>
+      <Text style={[F.h1, { marginTop: 4 }]}>{task.title}</Text>
+      {image ? (
+        <Image source={{ uri: image }} style={s.hintImage} resizeMode="cover" />
+      ) : (
+        <View style={[s.hintImage, s.hintImageEmpty]}>
+          <PlantPlaceholder size={84} />
         </View>
-      </View>
-    </Modal>
+      )}
+      <Text style={[F.body, { marginTop: 14 }]}>{task.hint}</Text>
+      <Btn label="Back to scan" onPress={onClose} style={{ marginTop: 18 }} />
+    </Sheet>
   )
 }
 
@@ -223,42 +264,30 @@ async function prepareImageForPlantNet(asset) {
 }
 
 const s = StyleSheet.create({
-  scroll: { padding: 20, paddingBottom: 40, flexGrow: 1 },
-  center: { alignItems: 'center', paddingTop: 24 },
-  taskBanner: { width: '100%', backgroundColor: C.white, borderRadius: 20, padding: 16, borderWidth: 2, borderColor: 'rgba(58,157,93,0.22)', marginBottom: 18 },
-  taskTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  taskLabel: { color: C.leafDark, fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
-  infoBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.leafDark, alignItems: 'center', justifyContent: 'center' },
-  infoText: { color: C.cream, fontWeight: '900', fontSize: 16, fontStyle: 'italic' },
-  taskTitle: { color: C.bark, fontSize: 19, fontWeight: '900', marginTop: 4 },
-  taskDesc: { color: C.muted, marginTop: 5, lineHeight: 19 },
-  taskPoints: { color: C.bark, fontWeight: '800', marginTop: 8 },
-  title: { fontSize: 22, fontWeight: '800', color: C.bark, marginTop: 8, textAlign: 'center' },
-  subtitle: { fontSize: 14, color: C.muted, textAlign: 'center', marginTop: 6, maxWidth: 300, lineHeight: 20 },
-  scanBtn: {
-    width: 180, height: 180, borderRadius: 90, backgroundColor: C.leaf,
-    alignItems: 'center', justifyContent: 'center', marginTop: 36,
-    shadowColor: C.leafDark, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 8,
-  },
-  scanBtnSmall: {
-    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 999, backgroundColor: C.leaf, marginTop: 24,
-  },
-  scanLabel: { color: C.white, fontSize: 18, fontWeight: '900', marginTop: 12 },
-  linkBtn: { marginTop: 28 },
-  linkText: { color: C.leafDark, fontWeight: '700', fontSize: 15 },
-  preview: { width: 240, height: 240, borderRadius: 28, marginBottom: 24 },
-  previewSmall: { width: 140, height: 140, borderRadius: 20, marginBottom: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  scanningText: { color: C.leafDark, fontWeight: '700', fontSize: 16 },
-  modalShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 22 },
-  hintCard: { backgroundColor: C.white, borderRadius: 26, padding: 18, maxHeight: '86%' },
-  hintTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  hintLabel: { color: C.leafDark, fontWeight: '900', textTransform: 'uppercase', fontSize: 12, letterSpacing: 0.8 },
-  closeCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.cream, alignItems: 'center', justifyContent: 'center' },
-  closeCircleText: { color: C.bark, fontSize: 22, fontWeight: '900', lineHeight: 24 },
-  hintTitle: { color: C.bark, fontWeight: '900', fontSize: 22, marginTop: 8 },
-  hintImage: { width: '100%', height: 230, borderRadius: 18, backgroundColor: '#e3f0e6', marginTop: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  hintBody: { color: C.muted, lineHeight: 21, marginTop: 14, fontWeight: '700' },
-  hintCloseBtn: { backgroundColor: C.leafDark, borderRadius: 16, alignItems: 'center', paddingVertical: 14, marginTop: 16 },
-  hintCloseText: { color: C.cream, fontWeight: '900' },
+  scroll: { padding: 18, paddingBottom: 120, flexGrow: 1 },
+  center: { alignItems: 'center', paddingTop: 10 },
+  flex1: { flex: 1 },
+  modeRow: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: T.c.surface, borderRadius: T.r.full, borderWidth: 1, borderColor: T.c.line, padding: 4, gap: 4, marginBottom: 14 },
+  modeBtn: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: T.r.full },
+  modeBtnOn: { backgroundColor: T.c.accentSoft },
+  modeText: { fontSize: 12, fontWeight: '800', color: T.c.faint },
+  modeTextOn: { color: T.c.accent },
+  missionPill: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch', backgroundColor: T.c.surface, borderRadius: T.r.md, borderWidth: 1, borderColor: T.c.line, padding: 12, marginBottom: 26 },
+  missionPillSub: { ...F.body, fontSize: 12, marginTop: 1 },
+  infoDot: { width: 26, height: 26, borderRadius: 13, backgroundColor: T.c.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  infoDotText: { color: T.c.accent, fontWeight: '800', fontStyle: 'italic', fontSize: 14 },
+  title: { textAlign: 'center', marginTop: 8 },
+  subtitle: { textAlign: 'center', marginTop: 8, maxWidth: 290 },
+  shutterWrap: { marginTop: 38, alignItems: 'center', justifyContent: 'center' },
+  halo: { position: 'absolute', width: 168, height: 168, borderRadius: 84, backgroundColor: T.c.accent },
+  shutter: { width: 168, height: 168, borderRadius: 84, backgroundColor: T.c.accent, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  shutterText: { color: T.c.onAccent, fontSize: 17, fontWeight: '800' },
+  preview: { width: 230, height: 230, borderRadius: T.r.lg, marginBottom: 22 },
+  previewSmall: { width: 130, height: 130, borderRadius: T.r.md, marginBottom: 16 },
+  scanningRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  scanningText: { ...F.bodyStrong, fontSize: 15 },
+  stateTitle: { textAlign: 'center', marginTop: 12 },
+  stateBtn: { marginTop: 22, alignSelf: 'stretch' },
+  hintImage: { width: '100%', height: 210, borderRadius: T.r.md, backgroundColor: T.c.photo, marginTop: 14 },
+  hintImageEmpty: { alignItems: 'center', justifyContent: 'center' },
 })

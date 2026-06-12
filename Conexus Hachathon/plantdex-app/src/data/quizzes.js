@@ -12,7 +12,7 @@
 // NOTE: real-time multiplayer lobbies, accounts, and persistence are the backend
 // team's job. The frontend ships these as local demo data + a local playthrough.
 
-export const QUIZ_ACCENTS = ['#3a9d5d', '#2c7a47', '#f4b942', '#b5562a', '#4a7fb5', '#7d5ba6']
+export const QUIZ_ACCENTS = ['#4ADE80', '#34D399', '#FBBF24', '#FB7185', '#60A5FA', '#A78BFA']
 
 export const AGRI_QUIZZES = [
   {
@@ -21,7 +21,7 @@ export const AGRI_QUIZZES = [
     title: 'Soil & Plant Nutrients',
     topic: 'Agronomy',
     emoji: '🌱',
-    accent: '#3a9d5d',
+    accent: '#4ADE80',
     description: 'How soil feeds crops: the key nutrients and what they do.',
     questions: [
       { id: 'q1', q: 'Which three nutrients does the "N-P-K" label on fertilizer stand for?', choices: ['Nitrogen, Phosphorus, Potassium', 'Nitrogen, Phosphorus, Calcium', 'Nickel, Phosphorus, Potassium', 'Nitrogen, Potassium, Carbon'], answer: 0, seconds: 20 },
@@ -37,7 +37,7 @@ export const AGRI_QUIZZES = [
     title: 'Crop Rotation & Cover Crops',
     topic: 'Soil management',
     emoji: '🔄',
-    accent: '#2c7a47',
+    accent: '#34D399',
     description: 'Why farmers move crops around fields season to season.',
     questions: [
       { id: 'q1', q: 'A main benefit of rotating crops each year is…', choices: ['Breaking pest and disease cycles', 'Making fields look tidy', 'Using more fertilizer', 'Slowing the harvest'], answer: 0, seconds: 20 },
@@ -52,7 +52,7 @@ export const AGRI_QUIZZES = [
     title: 'Photosynthesis & Growth',
     topic: 'Plant science',
     emoji: '☀️',
-    accent: '#f4b942',
+    accent: '#FBBF24',
     description: 'How plants turn light, water, and air into food.',
     questions: [
       { id: 'q1', q: 'Photosynthesis mainly happens in which part of the plant cell?', choices: ['Chloroplast', 'Nucleus', 'Root hair', 'Cell wall'], answer: 0, seconds: 20 },
@@ -68,7 +68,7 @@ export const AGRI_QUIZZES = [
     title: 'Pollinators & Bees',
     topic: 'Agroecology',
     emoji: '🐝',
-    accent: '#b5562a',
+    accent: '#FB7185',
     description: 'The animals that move pollen and keep crops fruiting.',
     questions: [
       { id: 'q1', q: 'Roughly what share of the food crops we eat depends on animal pollination?', choices: ['About a third', 'Almost none', 'Exactly half of all water', 'All of it'], answer: 0, seconds: 20 },
@@ -83,7 +83,7 @@ export const AGRI_QUIZZES = [
     title: 'Irrigation & Water',
     topic: 'Water management',
     emoji: '💧',
-    accent: '#4a7fb5',
+    accent: '#60A5FA',
     description: 'Getting the right amount of water to crops, efficiently.',
     questions: [
       { id: 'q1', q: 'Which irrigation method generally wastes the LEAST water?', choices: ['Drip irrigation', 'Flooding the whole field', 'Overhead spray at noon', 'Leaving a hose running'], answer: 0, seconds: 20 },
@@ -98,7 +98,7 @@ export const AGRI_QUIZZES = [
     title: 'Pests & Smart Control',
     topic: 'Crop protection',
     emoji: '🐛',
-    accent: '#7d5ba6',
+    accent: '#A78BFA',
     description: 'Integrated Pest Management: control pests with less spraying.',
     questions: [
       { id: 'q1', q: 'IPM stands for…', choices: ['Integrated Pest Management', 'Instant Plant Medicine', 'Intensive Pesticide Mixing', 'Internal Plant Mapping'], answer: 0, seconds: 20 },
@@ -113,7 +113,7 @@ export const AGRI_QUIZZES = [
     title: 'Composting & Soil Life',
     topic: 'Organic matter',
     emoji: '🪱',
-    accent: '#3a9d5d',
+    accent: '#4ADE80',
     description: 'Turning plant waste into rich food for the soil.',
     questions: [
       { id: 'q1', q: 'Composting turns kitchen and garden waste into…', choices: ['Nutrient-rich humus', 'Pure plastic', 'Clean drinking water', 'Sand'], answer: 0, seconds: 20 },
@@ -128,7 +128,7 @@ export const AGRI_QUIZZES = [
     title: 'Seeds & Germination',
     topic: 'Plant science',
     emoji: '🌰',
-    accent: '#2c7a47',
+    accent: '#34D399',
     description: 'What a seed needs to wake up and start growing.',
     questions: [
       { id: 'q1', q: 'Germination is the process where a seed…', choices: ['Begins to sprout and grow', 'Dries out and dies', 'Turns into soil', 'Becomes a rock'], answer: 0, seconds: 20 },
@@ -143,7 +143,7 @@ export const AGRI_QUIZZES = [
     title: 'Greenhouses & Climate',
     topic: 'Controlled growing',
     emoji: '🏡',
-    accent: '#f4b942',
+    accent: '#FBBF24',
     description: 'Growing food in a controlled, protected environment.',
     questions: [
       { id: 'q1', q: 'A greenhouse keeps plants warm by…', choices: ['Trapping heat from sunlight', 'Cooling the air', 'Blocking all light', 'Removing oxygen'], answer: 0, seconds: 20 },
@@ -158,7 +158,7 @@ export const AGRI_QUIZZES = [
     title: 'Sustainable Farming',
     topic: 'Agroecology',
     emoji: '♻️',
-    accent: '#4a7fb5',
+    accent: '#60A5FA',
     description: 'Farming that protects soil, water, and biodiversity for the future.',
     questions: [
       { id: 'q1', q: 'Sustainable agriculture aims to produce food while…', choices: ['Protecting soil and water for the future', 'Using up all resources fast', 'Ignoring the environment', 'Removing all wildlife'], answer: 0, seconds: 20 },

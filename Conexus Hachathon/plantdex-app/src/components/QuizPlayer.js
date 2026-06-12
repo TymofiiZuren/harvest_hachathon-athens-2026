@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
-import { C } from '../theme'
+import { View, Text, StyleSheet, ScrollView } from 'react-native'
+import { Press, Btn, Bar } from './ui'
+import { useCollection } from '../store/useCollection'
+import { T, F } from '../theme'
 
 // Local single-player playthrough of a quiz. Used by both the student/guest
 // "play" flow and the teacher "preview" flow. Real-time multiplayer is backend.
-const CHOICE_COLORS = ['#e3564a', '#2c7a47', '#4a7fb5', '#f4b942']
+const MARKERS = ['A', 'B', 'C', 'D']
 
 export default function QuizPlayer({ quiz, onExit }) {
   const questions = quiz?.questions || []
@@ -18,8 +20,10 @@ export default function QuizPlayer({ quiz, onExit }) {
   const total = questions.length
   const [timeLeft, setTimeLeft] = useState(question?.seconds || 20)
   const timerRef = useRef(null)
+  const addPoints = useCollection((s) => s.addPoints)
+  const awardedRef = useRef(false) // credit the score exactly once per playthrough
 
-  // Per-question countdown. Auto-reveals the answer when it hits zero.
+  // Per-question countdown.
   useEffect(() => {
     if (finished || !question) return
     setTimeLeft(question.seconds || 20)
@@ -27,10 +31,6 @@ export default function QuizPlayer({ quiz, onExit }) {
       setTimeLeft((t) => {
         if (t <= 1) {
           clearInterval(timerRef.current)
-          setAnswered((wasAnswered) => {
-            if (!wasAnswered) setSelected(null)
-            return true
-          })
           return 0
         }
         return t - 1
@@ -39,6 +39,16 @@ export default function QuizPlayer({ quiz, onExit }) {
     return () => clearInterval(timerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, finished])
+
+  // Auto-reveal the answer when the countdown hits zero. Kept outside the
+  // interval updater so we never set one state from inside another's setter.
+  useEffect(() => {
+    if (timeLeft === 0 && !answered && !finished && question) {
+      setSelected(null)
+      setAnswered(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft])
 
   function choose(choiceIndex) {
     if (answered) return
@@ -56,6 +66,10 @@ export default function QuizPlayer({ quiz, onExit }) {
 
   function next() {
     if (index + 1 >= total) {
+      if (!awardedRef.current && score > 0) {
+        addPoints(score)
+        awardedRef.current = true
+      }
       setFinished(true)
       return
     }
@@ -67,10 +81,8 @@ export default function QuizPlayer({ quiz, onExit }) {
   if (!question && !finished) {
     return (
       <View style={s.center}>
-        <Text style={s.bigTitle}>This quiz has no questions yet</Text>
-        <TouchableOpacity style={s.exitBtn} onPress={onExit}>
-          <Text style={s.exitText}>Back</Text>
-        </TouchableOpacity>
+        <Text style={F.h1}>This quiz has no questions yet</Text>
+        <Btn label="Back" kind="raised" onPress={onExit} style={{ marginTop: 18 }} />
       </View>
     )
   }
@@ -78,33 +90,40 @@ export default function QuizPlayer({ quiz, onExit }) {
   if (finished) {
     const pct = total ? Math.round((correctCount / total) * 100) : 0
     return (
-      <ScrollView contentContainerStyle={s.resultScroll}>
-        <View style={[s.resultHero, { backgroundColor: quiz.accent || C.leafDark }]}>
+      <ScrollView contentContainerStyle={s.resultScroll} showsVerticalScrollIndicator={false}>
+        <View style={s.resultCard}>
           <Text style={s.resultEmoji}>{pct >= 80 ? '🏆' : pct >= 50 ? '🌟' : '🌱'}</Text>
-          <Text style={s.resultTitle}>Quiz complete</Text>
-          <Text style={s.resultScore}>{score} pts</Text>
-          <Text style={s.resultSub}>{correctCount} of {total} correct ({pct}%)</Text>
+          <Text style={F.micro}>Quiz complete</Text>
+          <Text style={s.resultScore}>{score}</Text>
+          <Text style={[F.body, s.resultSub]}>{correctCount} of {total} correct · {pct}%</Text>
+          {score > 0 && (
+            <View style={s.creditChip}>
+              <Text style={s.creditText}>+{score} pts added to your total</Text>
+            </View>
+          )}
+          <Bar value={pct / 100} style={s.resultBar} />
         </View>
-        <TouchableOpacity style={s.primaryBtn} onPress={onExit}>
-          <Text style={s.primaryText}>Done</Text>
-        </TouchableOpacity>
+        <Btn label="Done" onPress={onExit} style={{ marginTop: 16 }} />
       </ScrollView>
     )
   }
 
   return (
-    <ScrollView contentContainerStyle={s.scroll}>
+    <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
       <View style={s.topRow}>
-        <Text style={s.progress}>Q{index + 1} / {total}</Text>
-        <View style={[s.timerPill, timeLeft <= 5 && s.timerLow]}>
-          <Text style={[s.timerText, timeLeft <= 5 && s.timerTextLow]}>{timeLeft}s</Text>
+        <Text style={s.progressText}>{index + 1} / {total}</Text>
+        <View style={[s.timer, timeLeft <= 5 && s.timerLow]}>
+          <Text style={[s.timerText, timeLeft <= 5 && { color: T.c.danger }]}>{timeLeft}s</Text>
         </View>
         <Text style={s.scoreText}>{score} pts</Text>
       </View>
 
-      <View style={s.trackOuter}>
-        <View style={[s.trackInner, { width: `${(timeLeft / (question.seconds || 20)) * 100}%`, backgroundColor: quiz.accent || C.leaf }]} />
-      </View>
+      <Bar
+        value={timeLeft / (question.seconds || 20)}
+        color={timeLeft <= 5 ? T.c.danger : T.c.accent}
+        height={6}
+        style={s.timeBar}
+      />
 
       <View style={s.questionCard}>
         <Text style={s.questionText}>{question.q}</Text>
@@ -114,83 +133,70 @@ export default function QuizPlayer({ quiz, onExit }) {
         {question.choices.map((choice, i) => {
           const isAnswer = i === question.answer
           const isPicked = i === selected
-          let stateStyle = { backgroundColor: CHOICE_COLORS[i % CHOICE_COLORS.length] }
+          let rowStyle = null
+          let markerStyle = null
           if (answered) {
-            if (isAnswer) stateStyle = s.choiceCorrect
-            else if (isPicked) stateStyle = s.choiceWrong
-            else stateStyle = s.choiceDim
+            if (isAnswer) { rowStyle = s.choiceCorrect; markerStyle = s.markerCorrect }
+            else if (isPicked) { rowStyle = s.choiceWrong; markerStyle = s.markerWrong }
+            else rowStyle = s.choiceDim
           }
           return (
-            <TouchableOpacity
-              key={i}
-              style={[s.choice, stateStyle]}
-              activeOpacity={0.85}
-              disabled={answered}
-              onPress={() => choose(i)}
-            >
+            <Press key={i} style={[s.choice, rowStyle]} disabled={answered} onPress={() => choose(i)}>
+              <View style={[s.marker, markerStyle]}>
+                <Text style={[s.markerText, (markerStyle === s.markerCorrect || markerStyle === s.markerWrong) && { color: T.c.onAccent }]}>
+                  {answered && isAnswer ? '✓' : answered && isPicked ? '✕' : MARKERS[i] || '·'}
+                </Text>
+              </View>
               <Text style={s.choiceText}>{choice}</Text>
-              {answered && isAnswer && <Text style={s.choiceMark}>✓</Text>}
-              {answered && isPicked && !isAnswer && <Text style={s.choiceMark}>✕</Text>}
-            </TouchableOpacity>
+            </Press>
           )
         })}
       </View>
 
       {answered && (
         <View style={s.feedback}>
-          <Text style={s.feedbackText}>
-            {selected === question.answer
-              ? 'Correct!'
-              : selected === null
-                ? "Time's up!"
-                : 'Not quite.'}
+          <Text style={[s.feedbackText, selected === question.answer ? { color: T.c.accent } : { color: T.c.danger }]}>
+            {selected === question.answer ? 'Correct!' : selected === null ? "Time's up" : 'Not quite'}
           </Text>
-          <TouchableOpacity style={[s.primaryBtn, { marginTop: 12 }]} onPress={next}>
-            <Text style={s.primaryText}>{index + 1 >= total ? 'See results' : 'Next question'}</Text>
-          </TouchableOpacity>
+          <Btn label={index + 1 >= total ? 'See results' : 'Next question'} onPress={next} style={{ marginTop: 12, alignSelf: 'stretch' }} />
         </View>
       )}
 
-      <TouchableOpacity style={s.quitBtn} onPress={onExit}>
-        <Text style={s.quitText}>Quit quiz</Text>
-      </TouchableOpacity>
+      <Btn label="Quit quiz" kind="ghost" onPress={onExit} style={{ marginTop: 14 }} />
     </ScrollView>
   )
 }
 
 const s = StyleSheet.create({
-  scroll: { padding: 18, paddingBottom: 40 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  scroll: { padding: 18, paddingBottom: 120 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: T.c.bg },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  progress: { color: C.bark, fontWeight: '900', fontSize: 14 },
-  scoreText: { color: C.leafDark, fontWeight: '900', fontSize: 14 },
-  timerPill: { backgroundColor: '#eef8f1', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 5 },
-  timerLow: { backgroundColor: 'rgba(227,86,74,0.16)' },
-  timerText: { color: C.leafDark, fontWeight: '900' },
-  timerTextLow: { color: '#e3564a' },
-  trackOuter: { height: 8, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.07)', marginTop: 12, overflow: 'hidden' },
-  trackInner: { height: 8, borderRadius: 999 },
-  questionCard: { backgroundColor: C.white, borderRadius: 22, padding: 22, marginTop: 16, borderWidth: 1, borderColor: C.line, minHeight: 120, justifyContent: 'center' },
-  questionText: { color: C.bark, fontSize: 20, fontWeight: '900', lineHeight: 28, textAlign: 'center' },
-  choices: { marginTop: 16, gap: 12 },
-  choice: { borderRadius: 18, paddingVertical: 18, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  choiceText: { color: C.white, fontWeight: '900', fontSize: 16, flex: 1 },
-  choiceMark: { color: C.white, fontWeight: '900', fontSize: 18, marginLeft: 10 },
-  choiceCorrect: { backgroundColor: C.leafDark },
-  choiceWrong: { backgroundColor: '#b5562a' },
-  choiceDim: { backgroundColor: '#c8c2b6' },
-  feedback: { marginTop: 18, alignItems: 'center' },
-  feedbackText: { color: C.bark, fontWeight: '900', fontSize: 17 },
-  primaryBtn: { backgroundColor: C.leafDark, borderRadius: 17, paddingVertical: 15, paddingHorizontal: 30, alignItems: 'center', alignSelf: 'stretch' },
-  primaryText: { color: C.cream, fontWeight: '900', fontSize: 16 },
-  quitBtn: { marginTop: 22, alignItems: 'center' },
-  quitText: { color: C.muted, fontWeight: '800' },
-  resultScroll: { padding: 20, paddingBottom: 40, flexGrow: 1, justifyContent: 'center' },
-  resultHero: { borderRadius: 30, padding: 30, alignItems: 'center', marginBottom: 20 },
-  resultEmoji: { fontSize: 56 },
-  resultTitle: { color: C.white, fontSize: 22, fontWeight: '900', marginTop: 10 },
-  resultScore: { color: C.white, fontSize: 44, fontWeight: '900', marginTop: 6 },
-  resultSub: { color: 'rgba(255,255,255,0.9)', fontWeight: '800', marginTop: 4 },
-  exitBtn: { marginTop: 20, backgroundColor: C.leafDark, borderRadius: 16, paddingVertical: 13, paddingHorizontal: 28 },
-  exitText: { color: C.cream, fontWeight: '900' },
+  progressText: { ...F.bodyStrong, fontSize: 13 },
+  timer: { backgroundColor: T.c.accentSoft, borderRadius: T.r.full, paddingHorizontal: 14, paddingVertical: 5 },
+  timerLow: { backgroundColor: T.c.dangerSoft },
+  timerText: { color: T.c.accent, fontWeight: '800', fontSize: 13 },
+  scoreText: { color: T.c.gold, fontWeight: '800', fontSize: 13 },
+  timeBar: { marginTop: 12 },
+  questionCard: { backgroundColor: T.c.surface, borderRadius: T.r.lg, borderWidth: 1, borderColor: T.c.line, padding: 22, marginTop: 16, minHeight: 110, justifyContent: 'center' },
+  questionText: { ...F.h1, fontSize: 19, textAlign: 'center', lineHeight: 26 },
+  choices: { marginTop: 14, gap: 9 },
+  choice: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: T.c.raised, borderRadius: T.r.sm, borderWidth: 1, borderColor: T.c.line, padding: 14 },
+  choiceCorrect: { backgroundColor: T.c.accentSoft, borderColor: 'rgba(74,222,128,0.45)' },
+  choiceWrong: { backgroundColor: T.c.dangerSoft, borderColor: 'rgba(248,113,113,0.45)' },
+  choiceDim: { opacity: 0.35 },
+  marker: { width: 30, height: 30, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  markerCorrect: { backgroundColor: T.c.accent },
+  markerWrong: { backgroundColor: T.c.danger },
+  markerText: { color: T.c.sub, fontWeight: '800', fontSize: 13 },
+  choiceText: { ...F.bodyStrong, fontSize: 15, flex: 1 },
+  feedback: { marginTop: 16, alignItems: 'center' },
+  feedbackText: { fontSize: 17, fontWeight: '800' },
+  resultScroll: { padding: 20, paddingBottom: 120, flexGrow: 1, justifyContent: 'center' },
+  resultCard: { backgroundColor: T.c.surface, borderRadius: T.r.xl, borderWidth: 1, borderColor: 'rgba(74,222,128,0.25)', padding: 30, alignItems: 'center' },
+  resultEmoji: { fontSize: 52, marginBottom: 10 },
+  resultScore: { fontSize: 56, fontWeight: '800', color: T.c.accent, letterSpacing: -2, marginTop: 2 },
+  resultSub: { marginTop: 4 },
+  creditChip: { backgroundColor: T.c.goldSoft, borderRadius: T.r.full, paddingHorizontal: 14, paddingVertical: 6, marginTop: 12 },
+  creditText: { color: T.c.gold, fontWeight: '800', fontSize: 13 },
+  resultBar: { alignSelf: 'stretch', marginTop: 18 },
 })
