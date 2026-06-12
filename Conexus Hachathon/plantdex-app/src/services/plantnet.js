@@ -14,6 +14,11 @@ import { SAMPLE_PLANTS } from '../data/samplePlants'
 const PLANTNET_URL =
   `https://my-api.plantnet.org/v2/identify/k-world-flora?api-key=${PLANTNET_API_KEY}&include-related-images=true`
 const WIKI_SUMMARY = 'https://en.wikipedia.org/api/rest_v1/page/summary/'
+// Wikipedia's REST API asks clients to identify themselves.
+const WIKI_HEADERS = {
+  'Api-User-Agent': 'PlantDexClassroom/1.0 (educational hackathon app)',
+  Accept: 'application/json',
+}
 
 export async function identifyPlant(input) {
   const asset = normalizeImageInput(input)
@@ -41,7 +46,13 @@ export async function identifyPlant(input) {
     return offlineIdentify(`Pl@ntNet HTTP ${res.status}`)
   }
 
-  const data = await res.json()
+  let data
+  try {
+    data = await res.json()
+  } catch (err) {
+    // Pl@ntNet answered but with a body we can't parse — treat like a server problem.
+    return offlineIdentify('Pl@ntNet returned an unreadable response')
+  }
   const top = data.results && data.results[0]
   if (!top) {
     return { notPlant: true } // responded fine, but recognised no species

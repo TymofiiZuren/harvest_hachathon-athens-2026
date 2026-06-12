@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Share, Alert } from 'react-native'
+import { View, Text, TextInput, StyleSheet, ScrollView, Share, Alert } from 'react-native'
 import { useQuiz } from '../store/useQuiz'
 import { joinLink } from '../data/quizzes'
 import QuizPlayer from '../components/QuizPlayer'
 import QuizCreateScreen from './QuizCreateScreen'
-import { C } from '../theme'
+import { Btn, Tag } from '../components/ui'
+import { T, F } from '../theme'
 
 // role: 'teacher' (build + host) or 'student' (join + play)
 export default function QuizScreen({ role = 'student' }) {
@@ -50,6 +51,13 @@ export default function QuizScreen({ role = 'student' }) {
     play(quiz)
   }
 
+  function removeQuiz(quiz) {
+    // If the quiz being deleted is currently hosted, end that session too so
+    // the live card never points at a quiz that no longer exists.
+    if (hosted?.quiz?.id === quiz.id) setHosted(null)
+    deleteQuiz(quiz.id)
+  }
+
   if (mode === 'play' && activeQuiz) {
     return <QuizPlayer quiz={activeQuiz} onExit={() => { setMode('list'); setActiveQuiz(null) }} />
   }
@@ -59,38 +67,31 @@ export default function QuizScreen({ role = 'student' }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={s.scroll}>
+    <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <View style={s.headerBlock}>
+        <Text style={F.micro}>{isTeacher ? 'Host live games' : 'Play & learn'}</Text>
+        <Text style={[F.display, s.headerTitle]}>Quizzes</Text>
+      </View>
+
       {isTeacher ? (
         <>
-          <View style={s.hero}>
-            <Text style={s.eyebrow}>Interactive quizzes</Text>
-            <Text style={s.heroTitle}>Host a live quiz</Text>
-            <Text style={s.heroSub}>Build Kahoot-style quizzes and share a join code with students.</Text>
-            <TouchableOpacity style={s.createBtn} onPress={() => setMode('create')}>
-              <Text style={s.createText}>+ Create new quiz</Text>
-            </TouchableOpacity>
-          </View>
+          <Btn label="+ Create new quiz" onPress={() => setMode('create')} style={s.createBtn} />
 
           {hosted && (
-            <View style={[s.hostCard, { borderColor: hosted.quiz.accent }]}>
-              <Text style={s.hostLabel}>Live now · {hosted.quiz.title}</Text>
+            <View style={s.liveCard}>
+              <Tag label="LIVE NOW" tone="accent" />
+              <Text style={[F.h2, s.liveTitle]}>{hosted.quiz.title}</Text>
               <Text style={s.pin}>{hosted.pin}</Text>
-              <Text style={s.hostHint}>Players join at plantdex.app/join with this PIN — no login needed.</Text>
-              <View style={s.hostActions}>
-                <TouchableOpacity style={s.shareBtn} onPress={() => share(hosted.quiz, hosted.pin)}>
-                  <Text style={s.shareText}>Share link</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={s.previewBtn} onPress={() => play(hosted.quiz)}>
-                  <Text style={s.previewText}>Preview</Text>
-                </TouchableOpacity>
+              <Text style={[F.body, s.liveHint]}>Students join with this PIN — no login needed.</Text>
+              <View style={s.liveActions}>
+                <Btn label="Share" small onPress={() => share(hosted.quiz, hosted.pin)} style={s.flex1} />
+                <Btn label="Preview" kind="raised" small onPress={() => play(hosted.quiz)} style={s.flex1} />
+                <Btn label="End" kind="danger" small onPress={() => setHosted(null)} style={s.flex1} />
               </View>
-              <TouchableOpacity onPress={() => setHosted(null)}>
-                <Text style={s.endText}>End session</Text>
-              </TouchableOpacity>
             </View>
           )}
 
-          <Text style={s.sectionTitle}>Quiz library ({quizzes.length})</Text>
+          <Text style={s.section}>Library · {quizzes.length}</Text>
           {quizzes.map((quiz) => (
             <QuizRow
               key={quiz.id}
@@ -99,32 +100,29 @@ export default function QuizScreen({ role = 'student' }) {
               onHost={() => host(quiz)}
               onPreview={() => play(quiz)}
               onShare={() => share(quiz)}
-              onDelete={quiz.custom ? () => deleteQuiz(quiz.id) : null}
+              onDelete={quiz.custom ? () => removeQuiz(quiz) : null}
             />
           ))}
         </>
       ) : (
         <>
-          <View style={s.hero}>
-            <Text style={s.eyebrow}>Interactive quizzes</Text>
-            <Text style={s.heroTitle}>Join a quiz</Text>
-            <Text style={s.heroSub}>Enter the code your teacher shared, or pick an agriculture quiz below to practice.</Text>
+          <View style={s.joinCard}>
+            <Text style={F.micro}>Have a code?</Text>
             <View style={s.joinRow}>
               <TextInput
                 style={s.joinInput}
                 value={code}
                 onChangeText={setCode}
                 placeholder="Enter code"
-                placeholderTextColor="#a79f91"
+                placeholderTextColor={T.c.faint}
                 autoCapitalize="characters"
+                accessibilityLabel="Quiz code"
               />
-              <TouchableOpacity style={s.joinBtn} onPress={joinByCode}>
-                <Text style={s.joinText}>Join</Text>
-              </TouchableOpacity>
+              <Btn label="Join" onPress={joinByCode} style={s.joinBtn} />
             </View>
           </View>
 
-          <Text style={s.sectionTitle}>Agriculture quizzes</Text>
+          <Text style={s.section}>Practice quizzes</Text>
           {quizzes.map((quiz) => (
             <QuizRow key={quiz.id} quiz={quiz} onPlay={() => play(quiz)} />
           ))}
@@ -136,78 +134,49 @@ export default function QuizScreen({ role = 'student' }) {
 
 function QuizRow({ quiz, teacher = false, onPlay, onHost, onPreview, onShare, onDelete }) {
   return (
-    <View style={[s.row, { borderLeftColor: quiz.accent }]}>
-      <View style={[s.quizMark, { backgroundColor: quiz.accent }]}>
-        <View style={s.quizMarkDot} />
-        <View style={s.quizMarkDot} />
-        <View style={s.quizMarkLine} />
+    <View style={s.row}>
+      <View style={[s.emojiTile, { backgroundColor: `${quiz.accent}22` }]}>
+        <Text style={s.emoji}>{quiz.emoji}</Text>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.rowTitle}>{quiz.title}</Text>
+      <View style={s.flex1}>
+        <Text style={F.bodyStrong}>{quiz.title}</Text>
         <Text style={s.rowMeta}>{quiz.topic} · {quiz.questions.length} questions · {quiz.code}</Text>
-        {teacher ? (
-          <View style={s.rowBtns}>
-            <SmallBtn label="Host" onPress={onHost} solid />
-            <SmallBtn label="Preview" onPress={onPreview} />
-            <SmallBtn label="Share" onPress={onShare} />
-            {onDelete && <SmallBtn label="Delete" onPress={onDelete} danger />}
-          </View>
-        ) : (
-          <View style={s.rowBtns}>
-            <SmallBtn label="Play" onPress={onPlay} solid />
-          </View>
-        )}
+        <View style={s.rowBtns}>
+          {teacher ? (
+            <>
+              <Btn label="Host" small onPress={onHost} />
+              <Btn label="Preview" kind="raised" small onPress={onPreview} />
+              <Btn label="Share" kind="raised" small onPress={onShare} />
+              {onDelete && <Btn label="Delete" kind="danger" small onPress={onDelete} />}
+            </>
+          ) : (
+            <Btn label="Play" small onPress={onPlay} />
+          )}
+        </View>
       </View>
     </View>
   )
 }
 
-function SmallBtn({ label, onPress, solid = false, danger = false }) {
-  return (
-    <TouchableOpacity
-      style={[s.smallBtn, solid && s.smallBtnSolid, danger && s.smallBtnDanger]}
-      onPress={onPress}
-      activeOpacity={0.85}
-    >
-      <Text style={[s.smallText, solid && s.smallTextSolid, danger && s.smallTextDanger]}>{label}</Text>
-    </TouchableOpacity>
-  )
-}
-
 const s = StyleSheet.create({
-  scroll: { padding: 16, paddingBottom: 42 },
-  hero: { backgroundColor: C.barkDark, borderRadius: 26, padding: 20, marginBottom: 16 },
-  eyebrow: { color: C.leafLight, fontWeight: '900', textTransform: 'uppercase', fontSize: 12 },
-  heroTitle: { color: C.cream, fontSize: 26, fontWeight: '900', marginTop: 5 },
-  heroSub: { color: 'rgba(246,244,236,0.8)', lineHeight: 20, marginTop: 8 },
-  createBtn: { backgroundColor: C.leaf, borderRadius: 16, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
-  createText: { color: C.white, fontWeight: '900', fontSize: 15 },
-  joinRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  joinInput: { flex: 1, backgroundColor: C.white, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: C.bark, fontWeight: '900', letterSpacing: 1 },
-  joinBtn: { backgroundColor: C.sun, borderRadius: 14, paddingHorizontal: 22, justifyContent: 'center' },
-  joinText: { color: C.barkDark, fontWeight: '900', fontSize: 15 },
-  hostCard: { backgroundColor: C.white, borderRadius: 24, padding: 20, marginBottom: 18, borderWidth: 2, alignItems: 'center' },
-  hostLabel: { color: C.bark, fontWeight: '900', fontSize: 14 },
-  pin: { color: C.bark, fontSize: 44, fontWeight: '900', letterSpacing: 6, marginVertical: 6 },
-  hostHint: { color: C.muted, textAlign: 'center', lineHeight: 18, marginBottom: 14 },
-  hostActions: { flexDirection: 'row', gap: 10, alignSelf: 'stretch' },
-  shareBtn: { flex: 1, backgroundColor: C.leafDark, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
-  shareText: { color: C.cream, fontWeight: '900' },
-  previewBtn: { flex: 1, borderWidth: 2, borderColor: C.leaf, borderRadius: 14, paddingVertical: 11, alignItems: 'center' },
-  previewText: { color: C.leafDark, fontWeight: '900' },
-  endText: { color: '#b5562a', fontWeight: '800', marginTop: 14 },
-  sectionTitle: { color: C.bark, fontSize: 18, fontWeight: '900', marginBottom: 10, marginTop: 2 },
-  row: { flexDirection: 'row', gap: 12, backgroundColor: C.white, borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line, borderLeftWidth: 5 },
-  quizMark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  quizMarkDot: { width: 7, height: 7, borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.92)' },
-  quizMarkLine: { width: 20, height: 4, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.92)' },
-  rowTitle: { color: C.bark, fontWeight: '900', fontSize: 16 },
-  rowMeta: { color: C.muted, fontWeight: '700', fontSize: 12, marginTop: 3 },
-  rowBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  smallBtn: { borderWidth: 1.5, borderColor: C.line, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
-  smallBtnSolid: { backgroundColor: C.leafDark, borderColor: C.leafDark },
-  smallBtnDanger: { borderColor: '#b5562a' },
-  smallText: { color: C.bark, fontWeight: '900', fontSize: 13 },
-  smallTextSolid: { color: C.cream },
-  smallTextDanger: { color: '#b5562a' },
+  scroll: { padding: 18, paddingBottom: 120 },
+  headerBlock: { marginBottom: 16 },
+  headerTitle: { marginTop: 4 },
+  createBtn: { marginBottom: 16 },
+  liveCard: { backgroundColor: T.c.surface, borderRadius: T.r.lg, borderWidth: 1, borderColor: 'rgba(74,222,128,0.3)', padding: 18, alignItems: 'center', marginBottom: 18 },
+  liveTitle: { marginTop: 10 },
+  pin: { color: T.c.text, fontSize: 42, fontWeight: '800', letterSpacing: 8, marginVertical: 6 },
+  liveHint: { textAlign: 'center', marginBottom: 14 },
+  liveActions: { flexDirection: 'row', gap: 8, alignSelf: 'stretch' },
+  flex1: { flex: 1 },
+  joinCard: { backgroundColor: T.c.surface, borderRadius: T.r.lg, borderWidth: 1, borderColor: T.c.line, padding: 16, marginBottom: 18 },
+  joinRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  joinInput: { flex: 1, backgroundColor: T.c.raised, borderRadius: T.r.sm, borderWidth: 1, borderColor: T.c.line, paddingHorizontal: 15, paddingVertical: 12, color: T.c.text, fontWeight: '800', letterSpacing: 1.5, fontSize: 15 },
+  joinBtn: { paddingHorizontal: 24 },
+  section: { ...F.h2, marginBottom: 10 },
+  row: { flexDirection: 'row', gap: 12, backgroundColor: T.c.surface, borderRadius: T.r.md, borderWidth: 1, borderColor: T.c.line, padding: 13, marginBottom: 9 },
+  emojiTile: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  emoji: { fontSize: 22 },
+  rowMeta: { ...F.body, fontSize: 12, marginTop: 2 },
+  rowBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 10 },
 })
